@@ -712,6 +712,19 @@ textarea{resize:vertical;min-height:80px}
         <input type="checkbox" id="p-tiene-descuento" style="width:auto" onchange="calcMargenProd()">
         <label style="margin:0;cursor:pointer" for="p-tiene-descuento">Este producto tiene descuento preestablecido (excluir del cashback)</label>
       </div>
+      <div style="border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:16px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:10px">🏷️ Promoción para distribuidores</div>
+        <div class="form-row">
+          <div class="form-group"><label>Descuento (%)</label><input type="number" id="p-promo-pct" min="0" max="100" placeholder="Ej: 15" oninput="calcMargenProd()"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Vigente desde</label><input type="date" id="p-promo-desde"></div>
+          <div class="form-group"><label>Vigente hasta</label><input type="date" id="p-promo-hasta"></div>
+        </div>
+        <div style="font-size:11px;color:var(--ink3);line-height:1.5">
+          Si defines un % y un rango de fechas, el producto aparecerá con el precio en promoción automáticamente para los distribuidores mientras la fecha de hoy esté dentro del rango. Deja el % vacío o en 0 para que no tenga promoción.
+        </div>
+      </div>
       <div class="form-group"><label>Descripción</label><textarea id="p-desc"></textarea></div>
       <div style="border-radius:var(--r);padding:12px;font-size:13px" id="prod-margen-preview"></div>
     </div>
@@ -1661,9 +1674,9 @@ function renderProductos() {
   if (_productosPage < 1) _productosPage = 1;
   const prodsPage = prods.slice((_productosPage-1)*PRODUCTOS_PAGE_SIZE, _productosPage*PRODUCTOS_PAGE_SIZE);
   document.getElementById('productos-table').innerHTML=prods.length===0?'<div class="empty"><div class="empty-icon">🧴</div><h3>Sin productos</h3></div>':`
-    <table><thead><tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Costo</th><th>Precio</th><th>Margen</th><th>Stock</th><th>Cashback</th><th></th></tr></thead><tbody>
+    <table><thead><tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Costo</th><th>Precio</th><th>Margen</th><th>Stock</th><th>Cashback</th><th>Promo</th><th></th></tr></thead><tbody>
     ${prodsPage.map(p=>{const m=p.precio>0?(p.precio-p.costo)/p.precio*100:0;
-    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td>${fmt(p.costo)}</td><td class="fw-600">${fmt(p.precio)}</td><td class="${m>=50?'color-sage':m>=35?'color-gold':'color-red'}">${m.toFixed(0)}%</td><td class="${p.stock<=p.stock_min?'color-red':'color-sage'} fw-600">${p.stock}</td><td>${p.tiene_descuento?'<span class="badge badge-gray" style="font-size:9px">Excluido</span>':'<span class="cashback-pill" style="font-size:9px">5%</span>'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editProducto('${p.id}')">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteProducto('${p.id}')">🗑</button></div></td></tr>`;}).join('')}
+    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td>${fmt(p.costo)}</td><td class="fw-600">${fmt(p.precio)}</td><td class="${m>=50?'color-sage':m>=35?'color-gold':'color-red'}">${m.toFixed(0)}%</td><td class="${p.stock<=p.stock_min?'color-red':'color-sage'} fw-600">${p.stock}</td><td>${p.tiene_descuento?'<span class="badge badge-gray" style="font-size:9px">Excluido</span>':'<span class="cashback-pill" style="font-size:9px">5%</span>'}</td><td>${productoEnPromoHoy(p)?`<span class="badge" style="font-size:9px;background:var(--gold-light);color:var(--gold)">🏷️ -${p.descuento_pct}%</span>`:(p.descuento_pct>0?`<span class="badge badge-gray" style="font-size:9px">Prog. ${p.promo_desde}</span>`:'')}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editProducto('${p.id}')">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteProducto('${p.id}')">🗑</button></div></td></tr>`;}).join('')}
     </tbody></table>
     ${paginationControlsHTML(_productosPage, totalPagesP, 'goToProductosPage')}`;
 }
@@ -1680,6 +1693,9 @@ function editProducto(id){
   document.getElementById('p-stock-min').value=p.stock_min;
   document.getElementById('p-desc').value=p.desc||'';
   document.getElementById('p-tiene-descuento').checked=p.tiene_descuento||false;
+  document.getElementById('p-promo-pct').value=p.descuento_pct||'';
+  document.getElementById('p-promo-desde').value=p.promo_desde||'';
+  document.getElementById('p-promo-hasta').value=p.promo_hasta||'';
   calcMargenProd();openModal('modal-producto');
 }
 function deleteProducto(id){if(!confirm('¿Eliminar?'))return;DB.productos=DB.productos.filter(p=>p.id!==id);saveDB();renderProductos();}
@@ -2315,7 +2331,7 @@ function poblarSelectCategoriaProducto(valorActual){
 function openModalProducto(){
   document.getElementById('modal-producto-title').textContent='Nuevo Producto';
   document.getElementById('p-id').value='';
-  ['p-nombre','p-costo','p-precio','p-stock','p-stock-min','p-desc'].forEach(id=>document.getElementById(id).value='');
+  ['p-nombre','p-costo','p-precio','p-stock','p-stock-min','p-desc','p-promo-pct','p-promo-desde','p-promo-hasta'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('p-tiene-descuento').checked=false;
   document.getElementById('prod-margen-preview').innerHTML='';
   poblarSelectCategoriaProducto('');
@@ -2326,11 +2342,18 @@ function calcMargenProd(){
   const costo=parseFloat(document.getElementById('p-costo')?.value)||0;
   const precio=parseFloat(document.getElementById('p-precio')?.value)||0;
   const hasDesc=document.getElementById('p-tiene-descuento')?.checked;
+  const promoPct=parseFloat(document.getElementById('p-promo-pct')?.value)||0;
   const prev=document.getElementById('prod-margen-preview');
   if(costo&&precio){
     const m=(precio-costo)/precio*100;
     prev.style.background=m>=50?'var(--sage-light)':m>=35?'var(--gold-light)':'var(--red-light)';
-    prev.innerHTML=`<strong>Margen: ${m.toFixed(1)}%</strong> · Ganancia: ${fmt(precio-costo)} · ${m>=50?'✓ Saludable':m>=35?'⚠ Aceptable':'🚨 Bajo'} · Cashback: ${hasDesc?'<span style="color:var(--ink3)">Excluido (tiene descuento)</span>':'<span class="cashback-pill">5% → '+fmt((precio-costo)*0.05)+' aprox.</span>'}`;
+    let html=`<strong>Margen: ${m.toFixed(1)}%</strong> · Ganancia: ${fmt(precio-costo)} · ${m>=50?'✓ Saludable':m>=35?'⚠ Aceptable':'🚨 Bajo'} · Cashback: ${hasDesc?'<span style="color:var(--ink3)">Excluido (tiene descuento)</span>':'<span class="cashback-pill">5% → '+fmt((precio-costo)*0.05)+' aprox.</span>'}`;
+    if(promoPct>0){
+      const precioPromo=precio*(1-promoPct/100);
+      const mPromo=(precioPromo-costo)/precioPromo*100;
+      html+=`<br><span style="color:var(--gold)">🏷️ Precio en promo: ${fmt(precioPromo)} (-${promoPct}%) · Margen en promo: ${mPromo.toFixed(1)}%${mPromo<0?' 🚨 Vendes por debajo del costo':''}</span>`;
+    }
+    prev.innerHTML=html;
   } else { prev.innerHTML=''; }
 }
 
@@ -2344,8 +2367,14 @@ function saveProducto(){
     categoria = document.getElementById('p-categoria-nueva').value.trim();
     if (!categoria) { alert('Escribe el nombre de la nueva categoría'); return; }
   }
+  const promoPct=parseFloat(document.getElementById('p-promo-pct').value)||0;
+  const promoDesde=document.getElementById('p-promo-desde').value||'';
+  const promoHasta=document.getElementById('p-promo-hasta').value||'';
+  if(promoPct>0 && promoPct<=100 && (!promoDesde||!promoHasta)){alert('Si defines un % de descuento, debes indicar la fecha de inicio y fin de la promoción');return;}
+  if(promoPct>100||promoPct<0){alert('El % de descuento debe estar entre 0 y 100');return;}
+  if(promoDesde&&promoHasta&&promoDesde>promoHasta){alert('La fecha "Vigente desde" no puede ser posterior a "Vigente hasta"');return;}
   const existingId=document.getElementById('p-id').value;
-  const data={nombre,categoria,costo,precio,stock:parseInt(document.getElementById('p-stock').value)||0,stock_min:parseInt(document.getElementById('p-stock-min').value)||5,desc:document.getElementById('p-desc').value,tiene_descuento:document.getElementById('p-tiene-descuento').checked,activo:true};
+  const data={nombre,categoria,costo,precio,stock:parseInt(document.getElementById('p-stock').value)||0,stock_min:parseInt(document.getElementById('p-stock-min').value)||5,desc:document.getElementById('p-desc').value,tiene_descuento:document.getElementById('p-tiene-descuento').checked,descuento_pct:promoPct,promo_desde:promoDesde,promo_hasta:promoHasta,activo:true};
   if(existingId){const p=getProducto(existingId);if(p)Object.assign(p,data);}
   else{
     const catPrefix={'Cuidado Labial':'BAL','Desodorantes':'DES','Jabones':'JAB','Packs':'PAC','Serums':'SER','Sérum':'SER','Otro':'PRD'};
@@ -2354,6 +2383,13 @@ function saveProducto(){
     DB.productos.push({id:`${prefix}-${String(count).padStart(3,'0')}`, ...data});
   }
   saveDB();closeModal('modal-producto');renderProductos();
+}
+
+// ── Un producto está "en promo" hoy si tiene % > 0 y la fecha actual cae dentro del rango ──
+function productoEnPromoHoy(p){
+  if(!p||!(p.descuento_pct>0)||!p.promo_desde||!p.promo_hasta) return false;
+  const hoy=new Date().toISOString().slice(0,10);
+  return hoy>=p.promo_desde && hoy<=p.promo_hasta;
 }
 
 // ══════════════════════════════════════════════════════════
