@@ -663,7 +663,13 @@ textarea{resize:vertical;min-height:80px}
           </div>
         </div>
         <div class="form-group"><label>Estado del Pago</label><select id="v-estado-pago"><option>confirmado</option><option>pendiente</option></select></div>
-        <div class="form-group"><label>Estado de Envío</label><select id="v-estado-envio"><option value="preparando">📦 Preparando</option><option value="enviado">🚚 Enviado</option><option value="entregado">✅ Entregado</option><option value="cancelado">❌ Cancelado</option></select></div>
+        <div class="form-group"><label>Estado de Envío</label><select id="v-estado-envio" onchange="toggleCamposEnvio()"><option value="preparando">📦 Preparando</option><option value="enviado">🚚 Enviado</option><option value="entregado">✅ Entregado</option><option value="cancelado">❌ Cancelado</option></select></div>
+      </div>
+      <div id="envio-guia-zone" class="form-row" style="display:none">
+        <div class="form-group"><label>Transportadora</label><select id="v-transportadora">
+          <option value="">Selecciona...</option><option>Envía</option><option>Interrapidísimo</option><option>Servientrega</option><option>Coordinadora</option><option>Otra</option>
+        </select></div>
+        <div class="form-group"><label>Número de guía</label><input type="text" id="v-guia" placeholder="Ej: 123456789"></div>
       </div>
       <div id="cashback-aplicar-zone" style="display:none;margin-bottom:12px">
         <div class="alert-strip alert-info">💜 <span id="cashback-disponible-txt"></span> <button class="btn btn-xs btn-gold" onclick="aplicarCashback()" id="btn-aplicar-cashback">Aplicar</button></div>
@@ -1270,16 +1276,35 @@ function renderVentas() {
     ${paginationControlsHTML(_ventasPage, totalPagesV, 'goToVentasPage')}`;
 }
 
+function toggleCamposEnvio() {
+  const estado = document.getElementById('v-estado-envio').value;
+  document.getElementById('envio-guia-zone').style.display = (estado === 'enviado' || estado === 'entregado') ? 'flex' : 'none';
+}
+
 // Quick-cycle envío state without opening edit modal
 function cycleEnvio(id) {
   const v = DB.ventas.find(x=>x.id===id); if(!v) return;
   const states = ['preparando','enviado','entregado','cancelado'];
   const cur = states.indexOf(v.estado_envio||'preparando');
-  v.estado_envio = states[(cur+1) % states.length];
+  const next = states[(cur+1) % states.length];
+
+  if (next === 'enviado') {
+    const TRANSPORTADORAS = ['Envía','Interrapidísimo','Servientrega','Coordinadora'];
+    const opciones = TRANSPORTADORAS.map((t,i) => `${i+1}. ${t}`).join('\n');
+    const sel = prompt(`Transportadora:\n${opciones}\n\nEscribe el número (1-4):`, v.transportadora ? (TRANSPORTADORAS.indexOf(v.transportadora)+1) : '');
+    const idx = parseInt(sel) - 1;
+    if (isNaN(idx) || idx < 0 || idx > 3) { alert('Debes elegir una transportadora válida (1-4) para marcar el pedido como enviado.'); return; }
+    const guia = prompt('Número de guía:', v.numero_guia || '');
+    if (!guia || !guia.trim()) { alert('Debes ingresar el número de guía para marcar el pedido como enviado.'); return; }
+    v.transportadora = TRANSPORTADORAS[idx];
+    v.numero_guia = guia.trim();
+  }
+
+  v.estado_envio = next;
   saveDB(); renderVentas();
   // Sync to pedidos_dist if this is a distributor order
   if (v.dist_id) {
-    _db.collection('pedidos_dist').doc(id).update({estado_envio: v.estado_envio})
+    _db.collection('pedidos_dist').doc(id).update({estado_envio: v.estado_envio, transportadora: v.transportadora||'', numero_guia: v.numero_guia||''})
       .then(() => console.log('[sync envio] OK ->', id, v.estado_envio))
       .catch((e) => { console.error('[sync envio] FALLÓ:', e.message); alert('⚠️ El estado de envío se guardó en tu panel, pero NO se pudo sincronizar con el distribuidor. Error: ' + e.message); });
   }
@@ -1301,6 +1326,9 @@ function editVenta(id){
   document.getElementById('v-descuento').value=v.descuento||0;
   document.getElementById('v-estado-pago').value=v.estado_pago;
   document.getElementById('v-estado-envio').value=v.estado_envio||'preparando';
+  document.getElementById('v-transportadora').value=v.transportadora||'';
+  document.getElementById('v-guia').value=v.numero_guia||'';
+  toggleCamposEnvio();
   document.querySelectorAll('#v-pago-checks input').forEach(cb=>cb.checked=false);
   if(v.metodo_pago){v.metodo_pago.split(' + ').forEach(m=>{const cb=document.querySelector('#v-pago-checks input[value="'+m+'"]');if(cb)cb.checked=true;});}
   const selCli=document.getElementById('v-cliente');
@@ -1318,7 +1346,16 @@ function editVenta(id){
       const rows=itemsEl.querySelectorAll('.form-row');
       const lr=rows[rows.length-1];
       const sel=lr.querySelector('.vi-prod');
-      if(sel){sel.value=d.id_producto;lr.querySelector('.vi-qty').value=d.cantidad;}
+      const txt=lr.querySelector('.vi-prod-txt');
+      const p=getProducto(d.id_producto);
+      if(sel){
+        sel.value=d.id_producto;
+        lr.querySelector('.vi-qty').value=d.cantidad;
+        const precioHistorico = d.precio_unitario ?? p?.precio ?? 0;
+        const fueConDescuento = p && d.precio_unitario && d.precio_unitario < p.precio;
+        lr.querySelector('.vi-precio-frozen').value = precioHistorico; // congela el precio ya facturado
+        if(txt) txt.value = p ? `${p.nombre} (${fmt(precioHistorico)}${fueConDescuento?' 🏷️':''})` : (d.id_producto||'');
+      }
     });
   } else { addVentaItem(); }
   calcTotalVenta();
@@ -1331,13 +1368,16 @@ function updateVenta(id){
   DB.detalle_ventas=DB.detalle_ventas.filter(d=>d.id_venta!==id);
   if(v.cashback_generado&&v.id_cliente){const c=getCliente(v.id_cliente);if(c)c.cashback=Math.max(0,(c.cashback||0)-v.cashback_generado);}
   const items=[];let totalBruto=0,costoProd=0,valid=true;
+  const fechaVenta=document.getElementById('v-fecha').value||v.fecha;
   document.querySelectorAll('#venta-items .form-row').forEach(row=>{
     const prod=row.querySelector('.vi-prod');const qty=parseInt(row.querySelector('.vi-qty')?.value)||0;
     if(!prod?.value||qty<=0){valid=false;return;}
     const p=getProducto(prod.value);if(!p)return;
     if(p.stock<qty){alert('Stock insuficiente: '+p.nombre+' ('+p.stock+' disponibles)');valid=false;return;}
-    totalBruto+=p.precio*qty;costoProd+=p.costo*qty;
-    items.push({id:uid('DET'),id_venta:id,id_producto:p.id,cantidad:qty,precio_unitario:p.precio,costo_unitario:p.costo,subtotal:p.precio*qty});
+    const frozen=row.querySelector('.vi-precio-frozen')?.value;
+    const precio=(frozen!==''&&frozen!=null)?parseFloat(frozen):precioEnFecha(p, fechaVenta);
+    totalBruto+=precio*qty;costoProd+=p.costo*qty;
+    items.push({id:uid('DET'),id_venta:id,id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:p.costo,subtotal:precio*qty});
   });
   if(!valid||items.length===0){if(valid)alert('Agrega al menos un producto');return;}
   const envio=parseFloat(document.getElementById('v-envio').value)||0;
@@ -1354,6 +1394,8 @@ function updateVenta(id){
   v.metodo_pago=metodos.join(' + ')||'No especificado';
   v.estado_pago=document.getElementById('v-estado-pago').value;
   v.estado_envio=document.getElementById('v-estado-envio').value||'preparando';
+  v.transportadora=document.getElementById('v-transportadora').value||'';
+  v.numero_guia=document.getElementById('v-guia').value.trim()||'';
   v.costo_productos=costoProd;
   const cb=calcCashback(cid,desc,items);
   v.cashback_generado=cb;
@@ -1366,6 +1408,10 @@ function updateVenta(id){
   });
   DB.detalle_ventas.push(...items);
   saveDB();closeModal('modal-venta');
+  if (v.dist_id) {
+    _db.collection('pedidos_dist').doc(id).update({estado_envio:v.estado_envio, transportadora:v.transportadora, numero_guia:v.numero_guia})
+      .catch((e) => console.warn('[sync envio edición] ', e.message));
+  }
   const ap=document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1]||'dashboard';
   renderPage(ap);
 }
@@ -2014,6 +2060,9 @@ function openModalVenta(){
   document.getElementById('v-edit-id').value='';
   document.getElementById('modal-venta-title').textContent='Registrar Venta';
   document.getElementById('v-estado-envio').value='preparando';
+  document.getElementById('v-transportadora').value='';
+  document.getElementById('v-guia').value='';
+  toggleCamposEnvio();
   document.getElementById('btn-guardar-venta').textContent='Guardar Venta';
   document.getElementById('v-fecha').value=today();
   document.getElementById('v-envio').value=0;
@@ -2092,6 +2141,7 @@ function addVentaItem(){
   div.innerHTML=`<div style="position:relative;flex:1">
     <input type="text" class="vi-prod-txt" placeholder="Buscar producto..." autocomplete="off" oninput="filtrarProductosVenta(this)" onfocus="filtrarProductosVenta(this)" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);font-family:'Outfit',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--ink)">
     <input type="hidden" class="vi-prod" value="">
+    <input type="hidden" class="vi-precio-frozen" value="">
     <div class="vi-prod-dropdown" style="display:none;position:absolute;z-index:80;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);max-height:200px;overflow-y:auto;width:100%;box-shadow:0 4px 16px rgba(0,0,0,.12);margin-top:2px"></div>
   </div>
   <div style="display:flex;gap:8px;align-items:center"><input type="number" class="vi-qty" value="1" min="1" style="width:80px" oninput="calcTotalVenta()"><button type="button" onclick="this.parentElement.parentElement.remove();calcTotalVenta()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px">✕</button></div>`;
@@ -2114,6 +2164,7 @@ function seleccionarProductoVenta(el, id, label){
   row.querySelector('.vi-prod').value = id;
   row.querySelector('.vi-prod-txt').value = label;
   row.querySelector('.vi-prod-dropdown').style.display = 'none';
+  row.querySelector('.vi-precio-frozen').value = ''; // selección nueva: usa el precio vigente hoy, no uno congelado
   calcTotalVenta();
 }
 document.addEventListener('click', e=>{
@@ -2124,11 +2175,14 @@ document.addEventListener('click', e=>{
 
 function calcTotalVenta(){
   let subtotal=0,costoTotal=0,cashbackBase=0;
+  const fechaVenta=document.getElementById('v-fecha')?.value||today();
   document.querySelectorAll('#venta-items .form-row').forEach(row=>{
     const prod=row.querySelector('.vi-prod');const qty=parseInt(row.querySelector('.vi-qty')?.value)||0;
     if(prod?.value){
       const p=getProducto(prod.value);
-      const precio=p?.precio||0;const costo=p?.costo||0;
+      const frozen=row.querySelector('.vi-precio-frozen')?.value;
+      const precio=(frozen!==''&&frozen!=null)?parseFloat(frozen):precioEnFecha(p, fechaVenta);
+      const costo=p?.costo||0;
       const hasDesc=p?.tiene_descuento===true;
       subtotal+=precio*qty;costoTotal+=costo*qty;
       if(!hasDesc)cashbackBase+=precio*qty;
@@ -2156,7 +2210,8 @@ function calcTotalVenta(){
       const qty = parseInt(row.querySelector('.vi-qty')?.value)||0;
       if (prod?.value && qty > 0) {
         const p=getProducto(prod.value);
-        const precio = p?.precio||0;
+        const frozen=row.querySelector('.vi-precio-frozen')?.value;
+        const precio = (frozen!==''&&frozen!=null)?parseFloat(frozen):precioEnFecha(p, fechaVenta);
         const hasDesc = p?.tiene_descuento===true;
         if (!hasDesc) cbBase += precio * qty;
       }
@@ -2181,13 +2236,15 @@ function calcTotalVenta(){
 
 function saveVenta(){
   const items=[];let totalBruto=0,costoProd=0,valid=true;
+  const fechaVenta=document.getElementById('v-fecha').value||today();
   document.querySelectorAll('#venta-items .form-row').forEach(row=>{
     const prod=row.querySelector('.vi-prod');const qty=parseInt(row.querySelector('.vi-qty')?.value)||0;
     if(!prod?.value||qty<=0){valid=false;return;}
     const p=getProducto(prod.value);if(!p)return;
     if(p.stock<qty){alert(`Stock insuficiente: ${p.nombre} (${p.stock} disponibles)`);valid=false;return;}
-    totalBruto+=p.precio*qty;costoProd+=p.costo*qty;
-    items.push({id:uid('DET'),id_venta:'',id_producto:p.id,cantidad:qty,precio_unitario:p.precio,costo_unitario:p.costo,subtotal:p.precio*qty});
+    const precio=precioEnFecha(p, fechaVenta);
+    totalBruto+=precio*qty;costoProd+=p.costo*qty;
+    items.push({id:uid('DET'),id_venta:'',id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:p.costo,subtotal:precio*qty});
   });
   if(!valid||items.length===0){if(valid)alert('Agrega al menos un producto');return;}
   const envio=parseFloat(document.getElementById('v-envio').value)||0;
@@ -2195,7 +2252,7 @@ function saveVenta(){
   const cid=document.getElementById('v-cliente').value;
   const vid=uid('VTA');
   items.forEach(i=>i.id_venta=vid);
-  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,total_bruto:totalBruto,descuento:desc,costo_envio:envio,total_pagado:totalBruto+envio-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',costo_productos:costoProd,cashback_generado:0};
+  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,total_bruto:totalBruto,descuento:desc,costo_envio:envio,total_pagado:totalBruto+envio-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
   const cb=calcCashback(cid, desc, items);
   venta.cashback_generado=cb;
   // Apply cashback discount if used
@@ -2390,6 +2447,18 @@ function productoEnPromoHoy(p){
   if(!p||!(p.descuento_pct>0)||!p.promo_desde||!p.promo_hasta) return false;
   const hoy=new Date().toISOString().slice(0,10);
   return hoy>=p.promo_desde && hoy<=p.promo_hasta;
+}
+// ── Igual que arriba, pero evaluado contra una fecha específica (ej. la fecha de una venta) ──
+// Esto es clave para que al editar/recalcular una venta antigua se respete el descuento
+// vigente EN ESA FECHA, y no el precio regular de hoy si la promo ya terminó (o viceversa).
+function productoEnPromoEnFecha(p, fechaStr){
+  if(!p||!(p.descuento_pct>0)||!p.promo_desde||!p.promo_hasta||!fechaStr) return false;
+  return fechaStr>=p.promo_desde && fechaStr<=p.promo_hasta;
+}
+// ── Precio a cobrar para un producto en una fecha determinada (con descuento si aplicaba ese día) ──
+function precioEnFecha(p, fechaStr){
+  if(!p) return 0;
+  return productoEnPromoEnFecha(p, fechaStr) ? p.precio*(1-p.descuento_pct/100) : p.precio;
 }
 
 // ══════════════════════════════════════════════════════════
