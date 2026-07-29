@@ -221,6 +221,11 @@ textarea{resize:vertical;min-height:80px}
   /* ── AI panel ── */
   .ai-panel{top:0;bottom:58px}
 }
+/* ── Toast de aviso (ej: distribuidor marcó pedido como recibido) ── */
+.admin-toast{position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:9999;max-width:340px;animation:admin-toast-in .25s ease-out}
+@keyframes admin-toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.nav-item{position:relative}
+.nav-item .nav-dot{position:absolute;top:6px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--sage);box-shadow:0 0 0 2px var(--surface)}
 </style>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -1085,6 +1090,28 @@ function nav(page) {
   actionBtn.onclick = ()=>{const m={dashboard:openModalVenta,ventas:openModalVenta,inventario:openModalEntrada,gastos:openModalGasto,productos:openModalProducto,clientes:openModalCliente,devoluciones:openModalDevolucion,distribuidores:openModalNuevoDist};if(m[page])m[page]();};
   renderPage(page);
   window.scrollTo(0,0);
+  quitarNavDot(page); // el admin ya revisó esta sección, se quita el aviso pendiente
+}
+
+// ── Toast flotante de aviso (ej: un distribuidor marcó su pedido como recibido) ──
+function showAdminToast(msg, dur=5000) {
+  const t = document.createElement('div');
+  t.className = 'admin-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), dur);
+}
+// ── Punto de notificación pendiente sobre un ítem del menú lateral ──
+function marcarNavDot(page) {
+  const item = document.querySelector(`.nav-item[onclick*="'${page}'"]`);
+  if (item && !item.querySelector('.nav-dot')) {
+    const dot = document.createElement('span');
+    dot.className = 'nav-dot';
+    item.appendChild(dot);
+  }
+}
+function quitarNavDot(page) {
+  document.querySelector(`.nav-item[onclick*="'${page}'"] .nav-dot`)?.remove();
 }
 
 function renderPage(p) {
@@ -1417,12 +1444,17 @@ function updateVenta(id){
 }
 
 function deleteVenta(id) {
-  if(!confirm('¿Eliminar esta venta?'))return;
   const v=DB.ventas.find(x=>x.id===id);
+  if (v && v.dist_id) {
+    alert('Esta venta viene de un pedido de distribuidor. No la borres desde aquí — usa el botón "✕ Cancelar" en la pestaña Distribuidores, para que también se reviertan correctamente el stock, los puntos de fidelización y el registro en el portal del distribuidor.');
+    return;
+  }
+  if(!confirm('¿Eliminar esta venta?'))return;
   if(v){
     if(v.cashback_generado&&v.id_cliente){const c=getCliente(v.id_cliente);if(c)c.cashback=Math.max(0,(c.cashback||0)-v.cashback_generado);}
     getVentaDetalle(id).forEach(d=>{const p=getProducto(d.id_producto);if(p)p.stock+=d.cantidad;});
     DB.detalle_ventas=DB.detalle_ventas.filter(d=>d.id_venta!==id);
+    DB.movimientos=DB.movimientos.filter(m=>m.referencia!==id||m.tipo!=='venta'); // limpia también el historial de movimientos
     DB.ventas=DB.ventas.filter(x=>x.id!==id);
     saveDB();renderVentas();
   }
@@ -2906,7 +2938,8 @@ function calcComision(total) {
       }
     }
   }
-  return { pct: Math.round(pct * 10) / 10, val: total * (pct / 100) };
+  const pctRedondeado = Math.round(pct * 10) / 10;
+  return { pct: pctRedondeado, val: total * (pctRedondeado / 100) };
 }
 
 // Ventas acumuladas del mes en curso para un distribuidor (sobre pedidos confirmados)
@@ -2920,6 +2953,153 @@ function ventasMensualesDistribuidor(distId, mesStr) {
 function calcComisionMensualDistribuidor(distId, mesStr) {
   const total = ventasMensualesDistribuidor(distId, mesStr);
   return { ...calcComision(total), totalMes: total };
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Cierre de comisión mensual por distribuidor (pago en bloque, 1-5 de cada mes) ──
+// ══════════════════════════════════════════════════════════
+
+function mesAnteriorStr() {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-1);
+  return d.toISOString().slice(0,7);
+}
+
+// Meses (YYYY-MM) en los que este distribuidor tiene al menos un pedido confirmado
+function mesesConfirmadosDist(distId) {
+  const meses = new Set(
+    (_pedidosDistCache||[])
+      .filter(p => p.dist_id === distId && p.estado_pago === 'confirmado' && p.fecha)
+      .map(p => p.fecha.slice(0,7))
+  );
+  const arr = Array.from(meses).sort().reverse();
+  // Asegura que el mes anterior siempre aparezca como opción, aunque aún no tenga pedidos
+  const anterior = mesAnteriorStr();
+  if (!arr.includes(anterior)) arr.unshift(anterior);
+  return arr.sort().reverse();
+}
+
+function nombreMes(mesStr) {
+  const [y,m] = mesStr.split('-');
+  const nombres = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return `${nombres[parseInt(m)-1]} ${y}`;
+}
+
+function renderResumenComisionMes(distId, mesSeleccionado) {
+  const cont = document.getElementById(`resumen-mes-${distId}`);
+  if (!cont) return;
+  const meses = mesesConfirmadosDist(distId);
+  const mes = mesSeleccionado || meses[0] || mesAnteriorStr();
+
+  const pedidosMes = (_pedidosDistCache||[]).filter(p =>
+    p.dist_id === distId && p.estado_pago === 'confirmado' && (p.fecha||'').startsWith(mes));
+  const totalMes = pedidosMes.reduce((a,p) => a + (p.total||0), 0);
+  const com = calcComision(totalMes); // % único para todo el mes, según lo acumulado ese mes
+  const pendientes = pedidosMes.filter(p => p.comision_pagada !== true);
+  const pagados = pedidosMes.filter(p => p.comision_pagada === true);
+  const comPendiente = pendientes.reduce((a,p) => a + (p.total||0)*com.pct/100, 0);
+  const comPagada = pagados.reduce((a,p) => a + (p.total||0)*com.pct/100, 0);
+
+  cont.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+      <div style="font-weight:600;font-size:13px">💰 Cierre de comisión mensual</div>
+      <select onchange="renderResumenComisionMes('${distId}', this.value)" style="font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border)">
+        ${meses.map(m => `<option value="${m}" ${m===mes?'selected':''}>${nombreMes(m)}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:10px">
+      <div><div style="font-size:11px;color:var(--ink3)">Ventas del mes</div><div style="font-weight:600">${fmt(totalMes)}</div></div>
+      <div><div style="font-size:11px;color:var(--ink3)">% aplicable</div><div style="font-weight:600">${com.pct}%</div></div>
+      <div><div style="font-size:11px;color:var(--ink3)">Comisión total</div><div style="font-weight:600;color:var(--sage)">${fmt(com.val)}</div></div>
+      <div><div style="font-size:11px;color:var(--ink3)">Ya pagada</div><div style="font-weight:600;color:#3a5a7a">${fmt(comPagada)}</div></div>
+      <div><div style="font-size:11px;color:var(--ink3)">Pendiente por pagar</div><div style="font-weight:600;color:${comPendiente>0?'var(--red)':'var(--sage)'}">${fmt(comPendiente)}</div></div>
+    </div>
+    ${pedidosMes.length===0
+      ? '<div style="font-size:12px;color:var(--ink3);font-style:italic">Sin pedidos confirmados en este mes.</div>'
+      : pendientes.length===0
+        ? '<div style="font-size:12px;color:var(--sage)">✓ Comisión de este mes completamente pagada.</div>'
+        : `<button class="btn btn-sm btn-primary" onclick="abrirModalPagoMasivoComision('${distId}','${mes}')">✓ Marcar todo el mes como pagado (${pendientes.length} pedido${pendientes.length===1?'':'s'})</button>`
+    }`;
+}
+
+let _pagoMasivoComprobanteBase64 = null;
+function abrirModalPagoMasivoComision(distId, mes) {
+  _pagoMasivoComprobanteBase64 = null;
+  const pendientes = (_pedidosDistCache||[]).filter(p =>
+    p.dist_id === distId && p.estado_pago === 'confirmado' && p.comision_pagada !== true && (p.fecha||'').startsWith(mes));
+  if (!pendientes.length) { alert('No hay comisiones pendientes para ese mes.'); return; }
+  const comMesCompleto = calcComision(
+    (_pedidosDistCache||[]).filter(p => p.dist_id===distId && p.estado_pago==='confirmado' && (p.fecha||'').startsWith(mes))
+      .reduce((a,p)=>a+(p.total||0),0)
+  );
+  const totalAPagar = pendientes.reduce((a,p) => a + (p.total||0)*comMesCompleto.pct/100, 0);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'overlay-pago-masivo-comision';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2100;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);color:var(--ink);border-radius:12px;width:100%;max-width:380px;padding:20px">
+      <div style="font-weight:600;margin-bottom:6px">💰 Marcar mes completo como pagado</div>
+      <div style="font-size:13px;color:var(--ink3);margin-bottom:12px">${nombreMes(mes)} · ${pendientes.length} pedido${pendientes.length===1?'':'s'} pendiente${pendientes.length===1?'':'s'}</div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:600">Total a pagar: ${fmt(totalAPagar)}</div>
+      <div class="form-group"><label>Comprobante de la transferencia</label><input type="file" accept="image/*" onchange="_previewPagoMasivoComision(this)"><div id="pago-masivo-comprobante-preview" style="margin-top:6px"></div></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-secondary" style="flex:1" onclick="document.getElementById('overlay-pago-masivo-comision').remove()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1" onclick="_confirmarPagoMasivoComision('${distId}','${mes}')">✓ Confirmar pago del mes</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function _previewPagoMasivoComision(input) {
+  const file = input.files?.[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 700/img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width*scale; canvas.height = img.height*scale;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      _pagoMasivoComprobanteBase64 = canvas.toDataURL('image/jpeg', 0.6);
+      document.getElementById('pago-masivo-comprobante-preview').innerHTML = `<img src="${_pagoMasivoComprobanteBase64}" style="max-width:140px;border-radius:4px">`;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function _confirmarPagoMasivoComision(distId, mes) {
+  document.getElementById('overlay-pago-masivo-comision')?.remove();
+  try {
+    const pendientes = (_pedidosDistCache||[]).filter(p =>
+      p.dist_id === distId && p.estado_pago === 'confirmado' && p.comision_pagada !== true && (p.fecha||'').startsWith(mes));
+    if (!pendientes.length) return;
+    const comMesCompleto = calcComision(
+      (_pedidosDistCache||[]).filter(p => p.dist_id===distId && p.estado_pago==='confirmado' && (p.fecha||'').startsWith(mes))
+        .reduce((a,p)=>a+(p.total||0),0)
+    );
+    const batch = _db.batch();
+    pendientes.forEach(p => {
+      batch.update(_db.collection('pedidos_dist').doc(p.id), {
+        comision_pagada: true,
+        comprobante_comision_base64: _pagoMasivoComprobanteBase64 || null
+      });
+    });
+    await batch.commit();
+
+    // Registra un único gasto agregado por el pago del mes completo (en vez de uno por pedido)
+    const totalPagado = pendientes.reduce((a,p) => a + (p.total||0)*comMesCompleto.pct/100, 0);
+    const dist = _distsCache.find(d => d.id === distId);
+    if (totalPagado > 0) {
+      DB.gastos.push({
+        id: uid('G'), fecha: today(), categoria: 'Comisiones de venta',
+        descripcion: `Comisión ${nombreMes(mes)} - ${dist?.nombre || 'Distribuidor'}`,
+        monto: Math.round(totalPagado), tipo: 'variable', proveedor: 'No aplica'
+      });
+      await saveDB();
+    }
+    _pagoMasivoComprobanteBase64 = null;
+    await renderDistribuidores();
+    showAdminToast(`✓ Comisión de ${nombreMes(mes)} marcada como pagada (${pendientes.length} pedidos)`);
+  } catch(e) { alert('Error al procesar el pago masivo: ' + e.message); }
 }
 
 // ── Sistema de puntos (independiente de la comisión, no se resetea mensualmente) ──
@@ -3185,6 +3365,7 @@ async function renderDistribuidores() {
     ]);
     dists = distSnap.docs.map(d => ({id: d.id, ...d.data()}));
     pedidosDist = pedidosSnap.docs.map(d => ({id: d.id, ...d.data()}));
+    _pedidosDistCache = pedidosDist; // usado por el resumen mensual de comisión
 
     // Verificar y aplicar caducidad de puntos (12 meses) para cada distribuidor con puntos activos
     for (const d of dists) {
@@ -3195,6 +3376,7 @@ async function renderDistribuidores() {
     // Releer con los saldos ya actualizados tras la caducidad
     const distSnapFresco = await _DIST_COL.get();
     dists = distSnapFresco.docs.map(d => ({id: d.id, ...d.data()}));
+    _distsCache = dists;
   } catch(e) {
     const u = firebase.auth().currentUser;
     const sesionCorrupta = !u || u.isAnonymous || !u.email;
@@ -3223,7 +3405,7 @@ async function renderDistribuidores() {
     const comMesActual = calcComisionMensualDistribuidor(d.id); // vigente hoy, mes en curso
 
     const pedidosHTML = dPedidos.length === 0
-      ? '<tr><td colspan="7" style="text-align:center;color:var(--ink3);font-style:italic;padding:12px">Sin pedidos registrados</td></tr>'
+      ? '<tr><td colspan="8" style="text-align:center;color:var(--ink3);font-style:italic;padding:12px">Sin pedidos registrados</td></tr>'
       : dPedidos.map(p => {
           // Comisión del pedido, según el % vigente en el MES de ese pedido (recalculado sobre ventas acumuladas ese mes)
           const pCom = calcComisionMensualDistribuidor(d.id, (p.fecha||'').slice(0,7));
@@ -3232,6 +3414,7 @@ async function renderDistribuidores() {
           const esConf = p.estado_pago === 'confirmado';
           const esCancelado = p.estado_pago === 'cancelado';
           const comPag = p.comision_pagada === true;
+          const recibido = p.dist_recibido === true;
           return `<tr style="background:var(--bg)${esCancelado?';opacity:0.55':''}">
             <td style="font-family:'JetBrains Mono',monospace;font-size:11px;padding-left:20px">${num}</td>
             <td>${p.fecha||'—'}</td>
@@ -3248,12 +3431,16 @@ async function renderDistribuidores() {
               </button>`}
             </td>
             <td>
-              <button onclick="toggleComisionPedidoDist('${p.id}',${comPag})"
-                style="border:none;border-radius:4px;padding:5px 9px;font-size:11px;cursor:pointer;white-space:nowrap;
-                  background:${comPag?'#3a5a7a':'var(--bg2)'};color:${comPag?'#fff':'var(--ink3)'};
-                  border:1px solid ${comPag?'#3a5a7a':'var(--border)'}">
-                ${comPag?'💰 Com. pagada':'○ Comisión'}
-              </button>
+              <span style="border-radius:4px;padding:5px 9px;font-size:11px;white-space:nowrap;display:inline-block;
+                background:${recibido?'#e8f0e8':'var(--bg2)'};color:${recibido?'#5a7a5c':'var(--ink3)'};
+                border:1px solid ${recibido?'#5a7a5c':'var(--border)'}">
+                ${recibido?'✓ Recibido':'○ En espera'}
+              </span>
+            </td>
+            <td>
+              <span style="font-size:11px;font-weight:600;color:${comPag?'#3a5a7a':'var(--ink3)'}">
+                ${comPag?'💰 Pagada':'⏳ Por pagar'}
+              </span>
             </td>
             <td>
               <div style="display:flex;gap:4px;flex-wrap:wrap">
@@ -3285,17 +3472,18 @@ async function renderDistribuidores() {
       </tr>
       <tr id="dist-row-${d.id}" style="display:none">
         <td colspan="8" style="padding:0;background:var(--bg2)">
+          <div id="resumen-mes-${d.id}" style="padding:14px 20px;border-bottom:1px solid var(--border)"></div>
           <table style="width:100%;border-collapse:collapse;font-size:12px">
             <thead><tr style="background:var(--border)">
               <th style="padding:8px 20px;text-align:left">Pedido</th>
-              <th>Fecha</th><th>Total</th><th>Comisión</th><th>Estado pago</th><th></th>
+              <th>Fecha</th><th>Total</th><th>Comisión</th><th>Estado pago</th><th>Recibido</th><th>Pago comisión</th><th></th>
             </tr></thead>
             <tbody>${pedidosHTML}</tbody>
             <tfoot><tr style="background:var(--bg2)">
               <td colspan="2" style="padding:8px 20px;font-weight:600">TOTAL (histórico)</td>
               <td style="font-weight:600">${fmt(total)}</td>
               <td style="font-weight:600;color:var(--sage)" title="Comisión vigente según ventas acumuladas de este mes: ${fmt(comMesActual.totalMes)}">${fmt(comMesActual.val)} (${comMesActual.pct}% · este mes)</td>
-              <td colspan="2"></td>
+              <td colspan="4"></td>
             </tfoot>
           </table>
         </td>
@@ -3314,7 +3502,9 @@ async function renderDistribuidores() {
 function toggleDistRow(distId) {
   const row = document.getElementById('dist-row-' + distId);
   if (!row) return;
-  row.style.display = row.style.display === 'none' ? '' : 'none';
+  const abriendo = row.style.display === 'none';
+  row.style.display = abriendo ? '' : 'none';
+  if (abriendo) renderResumenComisionMes(distId);
 }
 
 // Confirm a distributor order: integrate into DB.ventas + deduct stock
@@ -3582,6 +3772,8 @@ th{background:#f5f2ed;padding:8px 12px;text-align:left;font-size:10px;text-trans
 }
 
 let _comisionComprobanteBase64 = null;
+let _pedidosDistCache = []; // caché de pedidos_dist para el resumen mensual de comisión
+let _distsCache = []; // caché de distribuidores
 async function toggleComisionPedidoDist(pedidoId, currentState) {
   const nueva = !currentState;
 
@@ -4325,7 +4517,13 @@ async function initApp() {
       if (v) {
         let upd = false;
         if (data.dist_recibido !== undefined && v.dist_recibido !== data.dist_recibido) {
+          const acabaDeMarcarRecibido = data.dist_recibido === true && v.dist_recibido !== true;
           v.dist_recibido = data.dist_recibido; upd = true;
+          if (acabaDeMarcarRecibido) {
+            showAdminToast(`✓ ${v.dist_nombre||'Un distribuidor'} marcó el pedido ${v.id} como recibido`);
+            const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || '';
+            if (activePage !== 'ventas') marcarNavDot('ventas');
+          }
         }
         if (data.estado_envio && v.estado_envio !== data.estado_envio) {
           v.estado_envio = data.estado_envio; upd = true;
@@ -4334,6 +4532,7 @@ async function initApp() {
       }
     });
     if (changed) {
+      saveDB();
       const ap = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || '';
       if (ap === 'ventas') renderVentas();
     }
