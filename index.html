@@ -907,6 +907,12 @@ function _applyDB(data) {
   if (!data.devoluciones) data.devoluciones = [];
   data.productos.forEach(p => { if (p.tiene_descuento === undefined) p.tiene_descuento = false; });
   data.clientes.forEach(c => { if (c.cashback === undefined) c.cashback = 0; delete c.puntos; if (c.club_frescura === undefined) c.club_frescura = false; if (c.nota_credito === undefined) c.nota_credito = 0; });
+  // Transporte separado del monto de venta: ventas antiguas quedan con transporte 0
+  (data.ventas || []).forEach(v => {
+    if (v.costo_transporte === undefined) v.costo_transporte = 0;
+    if (v.transporte_pagado_por === undefined) v.transporte_pagado_por = '';
+    if (v.subtotal_productos === undefined) v.subtotal_productos = v.total_pagado || 0;
+  });
   DB = data;
   recalcCashbackHistorico();
 }
@@ -1417,6 +1423,9 @@ function updateVenta(id){
   v.total_bruto=totalBruto;
   v.descuento=desc;
   v.costo_envio=envio;
+  v.subtotal_productos=totalBruto-desc;
+  v.costo_transporte=envio;
+  if(v.transporte_pagado_por===undefined)v.transporte_pagado_por='';
   v.total_pagado=totalBruto+envio-desc;
   v.metodo_pago=metodos.join(' + ')||'No especificado';
   v.estado_pago=document.getElementById('v-estado-pago').value;
@@ -2284,7 +2293,7 @@ function saveVenta(){
   const cid=document.getElementById('v-cliente').value;
   const vid=uid('VTA');
   items.forEach(i=>i.id_venta=vid);
-  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,total_bruto:totalBruto,descuento:desc,costo_envio:envio,total_pagado:totalBruto+envio-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
+  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,total_bruto:totalBruto,descuento:desc,costo_envio:envio,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:'',total_pagado:totalBruto+envio-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
   const cb=calcCashback(cid, desc, items);
   venta.cashback_generado=cb;
   // Apply cashback discount if used
@@ -3568,6 +3577,7 @@ async function confirmarPedidoDist(pedidoId, currentState) {
       id: pedidoId, num: pedido.num, fecha: pedido.fecha,
       id_cliente: idClienteVinculado, canal_venta: 'Distribuidora',
       total_bruto: pedido.total, descuento: 0, costo_envio: 0,
+      subtotal_productos: pedido.total, costo_transporte: 0, transporte_pagado_por: '',
       total_pagado: pedido.total, metodo_pago: pedido.metodo_pago||'No especificado',
       estado_pago: 'confirmado', estado_envio: 'preparando', cashback_generado: 0,
       costo_productos: items.reduce((a,i) => a+(i.costo_unitario*i.cantidad),0),
@@ -4297,6 +4307,9 @@ function saveVentaDist() {
     total_bruto: totalBruto,
     descuento: 0,
     costo_envio: 0,
+    subtotal_productos: totalBruto,
+    costo_transporte: 0,
+    transporte_pagado_por: '',
     total_pagado: totalBruto,
     metodo_pago: document.getElementById('dv-metodo-pago').value,
     estado_pago: document.getElementById('dv-estado-pago').value,
