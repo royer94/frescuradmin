@@ -651,8 +651,8 @@ textarea{resize:vertical;min-height:80px}
       </div>
       <div class="form-group"><label>Productos</label><div id="venta-items"></div><button class="btn btn-secondary btn-sm" onclick="addVentaItem()" style="margin-top:8px">+ Agregar producto</button></div>
       <div class="form-row-3">
-        <div class="form-group"><label>Costo de Transporte (COP)</label><input type="number" id="v-envio" value="0" oninput="calcTotalVenta()"></div>
-        <div class="form-group"><label>Transporte pagado por</label><select id="v-transporte-por" onchange="calcTotalVenta()"><option value="cliente">Cliente</option><option value="frescura">Frescura</option></select></div>
+        <div class="form-group"><label>Costo real del transporte (COP)</label><input type="number" id="v-envio" value="0" oninput="calcTotalVenta()"></div>
+        <div class="form-group"><label>Cobrado al cliente (COP)</label><input type="number" id="v-envio-cobrado" value="0" placeholder="Auto" oninput="onEnvioCobradoInput()"></div>
         <div class="form-group"><label>Descuento (COP)</label><input type="number" id="v-descuento" value="0" oninput="calcTotalVenta()"></div>
       </div>
       <div class="form-row">
@@ -918,11 +918,32 @@ function _applyDB(data) {
   recalcCashbackHistorico();
 }
 
-// Transporte: devuelve quién lo paga y cuánto se le cobra al cliente en el total.
-// Si lo paga el cliente, entra a total_pagado; si lo paga Frescura, no.
-function calcTransporteVenta(envio, por) {
-  const _por = envio !== 0 ? (por || 'cliente') : '';
-  return { por: _por, cobrado: _por === 'cliente' ? envio : 0 };
+// ── Regla comercial de envío (umbrales sobre subtotal de productos DESPUÉS del descuento) ──
+const ENVIO_UMBRAL_REDUCIDO = 70000;   // desde aquí el cliente paga solo la tarifa reducida
+const ENVIO_UMBRAL_GRATIS   = 150000;  // desde aquí el cliente no paga envío
+const ENVIO_TARIFA_REDUCIDA = 5000;
+let _envioCobradoManual = false;       // true si el usuario escribió "Cobrado al cliente" a mano
+
+// Sugerencia de cuánto cobrar al cliente según el monto de productos y el costo real del transporte.
+function sugerirCobroTransporte(subtotalNeto, costoReal) {
+  if (costoReal <= 0) return costoReal;                       // sin transporte (o valor heredado negativo): no aplica la regla
+  if (subtotalNeto >= ENVIO_UMBRAL_GRATIS) return 0;
+  if (subtotalNeto >= ENVIO_UMBRAL_REDUCIDO) return Math.min(ENVIO_TARIFA_REDUCIDA, costoReal);
+  return costoReal;
+}
+
+// costo = costo real del transporte; cobrado = lo que paga el cliente (entra a total_pagado).
+// frescura = parte que absorbe Frescura (base del gasto de logística).
+function calcTransporteVenta(costo, cobrado) {
+  if (costo === 0 && cobrado === 0) return { por: '', cobrado: 0, frescura: 0 };
+  const frescura = Math.max(0, costo - cobrado);
+  const por = cobrado >= costo ? 'cliente' : (cobrado === 0 ? 'frescura' : 'compartido');
+  return { por, cobrado, frescura };
+}
+
+function onEnvioCobradoInput() {
+  _envioCobradoManual = document.getElementById('v-envio-cobrado').value !== '';  // vaciar el campo = volver a automático
+  calcTotalVenta();
 }
 
 async function loadDB() {
@@ -1366,7 +1387,8 @@ function editVenta(id){
   document.getElementById('v-fecha').value=v.fecha;
   document.getElementById('v-canal').value=v.canal_venta;
   document.getElementById('v-envio').value=v.costo_transporte||v.costo_envio||0;
-  document.getElementById('v-transporte-por').value=v.transporte_pagado_por||'cliente';
+  document.getElementById('v-envio-cobrado').value=v.costo_envio||0;
+  _envioCobradoManual=true;   // al editar se respeta lo que quedó guardado
   document.getElementById('v-descuento').value=v.descuento||0;
   document.getElementById('v-estado-pago').value=v.estado_pago;
   document.getElementById('v-estado-envio').value=v.estado_envio||'preparando';
@@ -1424,8 +1446,9 @@ function updateVenta(id){
     items.push({id:uid('DET'),id_venta:id,id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:p.costo,subtotal:precio*qty});
   });
   if(!valid||items.length===0){if(valid)alert('Agrega al menos un producto');return;}
+  calcTotalVenta();
   const envio=parseFloat(document.getElementById('v-envio').value)||0;
-  const _tr=calcTransporteVenta(envio, document.getElementById('v-transporte-por').value);
+  const _tr=calcTransporteVenta(envio, parseFloat(document.getElementById('v-envio-cobrado').value)||0);
   const _por=_tr.por;
   const envioCobrado=_tr.cobrado;
   const desc=parseFloat(document.getElementById('v-descuento').value)||0;
@@ -2121,7 +2144,8 @@ function openModalVenta(){
   document.getElementById('btn-guardar-venta').textContent='Guardar Venta';
   document.getElementById('v-fecha').value=today();
   document.getElementById('v-envio').value=0;
-  document.getElementById('v-transporte-por').value='cliente';
+  document.getElementById('v-envio-cobrado').value=0;
+  _envioCobradoManual=false;
   document.getElementById('v-descuento').value=0;
   document.querySelectorAll('#v-pago-checks input').forEach(cb=>cb.checked=false);
   document.getElementById('venta-items').innerHTML='';
@@ -2246,12 +2270,15 @@ function calcTotalVenta(){
   });
   const envio=parseFloat(document.getElementById('v-envio')?.value)||0;
   const desc=parseFloat(document.getElementById('v-descuento')?.value)||0;
-  const _trPrev=calcTransporteVenta(envio, document.getElementById('v-transporte-por')?.value);
+  if(!_envioCobradoManual){const _cobEl=document.getElementById('v-envio-cobrado');if(_cobEl)_cobEl.value=sugerirCobroTransporte(subtotal-desc, envio);}
+  const _cobIn=parseFloat(document.getElementById('v-envio-cobrado')?.value)||0;
+  const _trPrev=calcTransporteVenta(envio, _cobIn);
   const total=subtotal+_trPrev.cobrado-desc;
-  const margen=total>0?(total-costoTotal)/total*100:0;
+  const _neto=subtotal-desc;
+  const margen=_neto>0?(_neto-costoTotal)/_neto*100:0;
   const cb=Math.floor(cashbackBase*0.05);
   document.getElementById('v-subtotal').textContent=fmt(subtotal);
-  document.getElementById('v-envio-display').textContent=(_trPrev.por==='frescura')?('Asume Frescura ('+fmt(envio)+')'):fmt(_trPrev.cobrado);
+  document.getElementById('v-envio-display').textContent=fmt(_trPrev.cobrado)+(_trPrev.frescura>0?' · Frescura absorbe '+fmt(_trPrev.frescura):'');
   document.getElementById('v-descuento-display').textContent='-'+fmt(desc);
   document.getElementById('v-total-display').textContent=fmt(total);
   document.getElementById('v-costo-display').textContent=fmt(costoTotal);
@@ -2304,8 +2331,9 @@ function saveVenta(){
     items.push({id:uid('DET'),id_venta:'',id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:p.costo,subtotal:precio*qty});
   });
   if(!valid||items.length===0){if(valid)alert('Agrega al menos un producto');return;}
+  calcTotalVenta();
   const envio=parseFloat(document.getElementById('v-envio').value)||0;
-  const _tr=calcTransporteVenta(envio, document.getElementById('v-transporte-por').value);
+  const _tr=calcTransporteVenta(envio, parseFloat(document.getElementById('v-envio-cobrado').value)||0);
   const _por=_tr.por;
   const envioCobrado=_tr.cobrado;
   const desc=parseFloat(document.getElementById('v-descuento').value)||0;
