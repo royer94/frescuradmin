@@ -946,6 +946,22 @@ function onEnvioCobradoInput() {
   calcTotalVenta();
 }
 
+// Gasto de logística automático: crea, actualiza o elimina el gasto ligado a la venta (g.id_venta).
+const CAT_GASTO_LOGISTICA = 'Logística / Envíos';
+function sincronizarGastoTransporte(v) {
+  if (!DB.gastos) DB.gastos = [];
+  const absorbido = Math.max(0, (v.costo_transporte || 0) - (v.costo_envio || 0));
+  const idx = DB.gastos.findIndex(g => g.id_venta === v.id && g.categoria === CAT_GASTO_LOGISTICA);
+  if (absorbido > 0) {
+    const datos = { fecha: v.fecha, categoria: CAT_GASTO_LOGISTICA, descripcion: 'Transporte venta ' + v.id,
+                    monto: absorbido, tipo: 'variable', proveedor: v.transportadora || 'No aplica', id_venta: v.id };
+    if (idx >= 0) Object.assign(DB.gastos[idx], datos);
+    else DB.gastos.push({ id: uid('G'), ...datos });
+  } else if (idx >= 0) {
+    DB.gastos.splice(idx, 1);
+  }
+}
+
 async function loadDB() {
   // Show loading indicator
   document.getElementById('page-title').textContent = 'Cargando datos...';
@@ -1480,6 +1496,7 @@ function updateVenta(id){
     if(p){p.stock-=d.cantidad;DB.movimientos.push({id:uid('MOV'),fecha:v.fecha,id_producto:p.id,tipo:'venta',cantidad:-d.cantidad,costo_unitario:d.costo_unitario,referencia:id,nota:'Venta '+id+' (editada)'});}
   });
   DB.detalle_ventas.push(...items);
+  sincronizarGastoTransporte(v);
   saveDB();closeModal('modal-venta');
   if (v.dist_id) {
     _db.collection('pedidos_dist').doc(id).update({estado_envio:v.estado_envio, transportadora:v.transportadora, numero_guia:v.numero_guia})
@@ -1502,8 +1519,27 @@ function deleteVenta(id) {
     DB.detalle_ventas=DB.detalle_ventas.filter(d=>d.id_venta!==id);
     DB.movimientos=DB.movimientos.filter(m=>m.referencia!==id||m.tipo!=='venta'); // limpia también el historial de movimientos
     DB.ventas=DB.ventas.filter(x=>x.id!==id);
+    DB.gastos=DB.gastos.filter(g=>!(g.id_venta===id&&g.categoria===CAT_GASTO_LOGISTICA)); // elimina el gasto de transporte ligado
     saveDB();renderVentas();
   }
+}
+
+// Línea de envío del comprobante: null = no hay línea (venta sin transporte).
+function lineaEnvioComprobante(v) {
+  const cobrado = v.costo_envio || 0;                      // lo que pagó el cliente
+  const costoReal = v.costo_transporte || v.costo_envio || 0;
+  if (costoReal === 0 && cobrado === 0) return null;
+  if (cobrado === 0) return { etiqueta: 'Envío', gratis: true };                       // lo asumió Frescura
+  if (cobrado > 0 && cobrado < costoReal) return { etiqueta: 'Envío (tarifa especial)', monto: cobrado };
+  return { etiqueta: 'Envío', monto: cobrado };
+}
+
+// Cashback que habría generado la compra (para invitar al Club): solo productos sin descuento, y nunca con descuento aplicado.
+function calcCashbackHipotetico(v, items) {
+  if ((v.descuento || 0) > 0) return 0;
+  let base = 0;
+  items.forEach(d => { const p = getProducto(d.id_producto); if (p && !p.tiene_descuento) base += d.subtotal; });
+  return Math.floor(base * 0.05);
 }
 
 function generarFactura(id) {
@@ -1514,6 +1550,7 @@ function generarFactura(id) {
   const esClub = c?.club_frescura || false;
   const cb = v.cashback_generado || 0;
   const cbTotal = c ? (c.cashback || 0) : 0;
+  const cbHip = calcCashbackHipotetico(v, items);
   const fmt2 = n => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', minimumFractionDigits:0}).format(n||0);
 
   const itemsHTML = items.map(d => {
@@ -1557,7 +1594,7 @@ function generarFactura(id) {
         </div>
         <div style="font-size:13px;color:#4a4640;line-height:1.6">
           Como miembro del Club Frescura obtienes <strong>5% de cashback</strong> en cada compra para usar en la siguiente.<br>
-          Esta compra de <strong>${fmt2(v.total_pagado)}</strong> te habría generado <strong style="color:#5a2d82">+${fmt2(Math.floor(v.total_pagado * 0.05))}</strong> de cashback.<br><br>
+          ${cbHip > 0 ? `Esta compra te habría generado <strong style="color:#5a2d82">+${fmt2(cbHip)}</strong> de cashback.<br><br>` : '<br>'}
           <strong>Escríbenos para activar tu membresía sin costo 💚</strong>
         </div>
       </div>`;
@@ -1627,10 +1664,10 @@ function generarFactura(id) {
 
 <!-- TOTALES -->
 <div style="margin-top:0;border-top:2px solid #1e1c18;padding-top:12px">
-  ${v.costo_envio && v.costo_envio !== 0 ? `
+  ${(() => { const e = lineaEnvioComprobante(v); return e ? `
   <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#4a4640">
-    <span>Envío</span><span>${fmt2(v.costo_envio)}</span>
-  </div>` : ''}
+    <span>${e.etiqueta}</span>${e.gratis ? '<span style="color:#5a7a5c;font-weight:600">GRATIS</span>' : `<span>${fmt2(e.monto)}</span>`}
+  </div>` : ''; })()}
   ${v.descuento > 0 ? `
   <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#9b3a3a">
     <span>Descuento</span><span>-${fmt2(v.descuento)}</span>
@@ -1647,7 +1684,7 @@ ${cashbackSection}
 <!-- FOOTER -->
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e8e4dc;text-align:center;font-size:11px;color:#8a847a;line-height:1.8">
   Gracias por tu compra 🌿 · Frescura Natural Cosméticos · Hecho con amor en Colombia<br>
-  <span style="font-size:10px">Este documento es un comprobante de compra · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
+  <span style="font-size:10px">Este documento es un comprobante de venta · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
 </div>
 
 <!-- PRINT BUTTON -->
@@ -2350,6 +2387,7 @@ function saveVenta(){
   items.forEach(d=>{const p=getProducto(d.id_producto);if(p){p.stock-=d.cantidad;DB.movimientos.push({id:uid('MOV'),fecha:venta.fecha,id_producto:p.id,tipo:'venta',cantidad:-d.cantidad,costo_unitario:d.costo_unitario,referencia:vid,nota:`Venta ${vid}`});}});
   if(cid){const c=getCliente(cid);if(c)c.total_historico=(c.total_historico||0)+venta.total_pagado;}
   DB.ventas.push(venta);DB.detalle_ventas.push(...items);
+  sincronizarGastoTransporte(venta);
   saveDB();closeModal('modal-venta');
   const activePage=document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1]||'dashboard';
   renderPage(activePage);
