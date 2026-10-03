@@ -1031,7 +1031,9 @@ const uid = p => `${p}-${Date.now().toString(36).toUpperCase()}`;
 const getProducto = id => DB.productos.find(p=>p.id===id);
 const getCliente = id => DB.clientes.find(c=>c.id===id);
 const getVentaDetalle = vid => DB.detalle_ventas.filter(d=>d.id_venta===vid);
-const totalVentas = arr => arr.reduce((a,v)=>a+(v.total_pagado||0),0);
+// Venta "neta" para reportes: solo productos (sin transporte). Fallback a total_pagado si falta el campo.
+const ventaNeta = v => (v.subtotal_productos !== undefined ? (v.subtotal_productos||0) : (v.total_pagado||0));
+const totalVentas = arr => arr.reduce((a,v)=>a+ventaNeta(v),0);
 const totalCosto = arr => arr.reduce((a,v)=>a+(v.costo_productos||0),0);
 const totalGastos = arr => arr.reduce((a,g)=>a+(g.monto||0),0);
 
@@ -1054,7 +1056,7 @@ function currentMonthGastos() {
 }
 function getTopCanal(ventas) {
   const c={};
-  ventas.forEach(v=>{c[v.canal_venta]=(c[v.canal_venta]||0)+v.total_pagado});
+  ventas.forEach(v=>{c[v.canal_venta]=(c[v.canal_venta]||0)+ventaNeta(v)});
   return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]?.[0]||'N/A';
 }
 
@@ -1178,7 +1180,7 @@ function renderDashboard() {
 
   // Canal chart
   const porCanal={};
-  mv.forEach(v=>{porCanal[v.canal_venta]=(porCanal[v.canal_venta]||0)+v.total_pagado});
+  mv.forEach(v=>{porCanal[v.canal_venta]=(porCanal[v.canal_venta]||0)+ventaNeta(v)});
   // Populate month selector with all months that have data
   const allMonths = [...new Set([
     ...DB.ventas.map(v=>v.fecha?.slice(0,7)),
@@ -1239,7 +1241,7 @@ function buildHistChart(mode) {
       const d=new Date(now.getFullYear(),now.getMonth()-i,1);
       const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       const label=d.toLocaleDateString('es-CO',{month:'short'});
-      const total=DB.ventas.filter(v=>v.fecha?.startsWith(ym)&&v.estado_pago==='confirmado').reduce((a,v)=>a+v.total_pagado,0);
+      const total=DB.ventas.filter(v=>v.fecha?.startsWith(ym)&&v.estado_pago==='confirmado').reduce((a,v)=>a+ventaNeta(v),0);
       items.push({label,total,active:i===0});
     }
   } else {
@@ -1248,7 +1250,7 @@ function buildHistChart(mode) {
       const start=new Date(now);start.setDate(now.getDate()-i*7-6);
       const end=new Date(now);end.setDate(now.getDate()-i*7);
       const label=`S${4-i}`;
-      const total=DB.ventas.filter(v=>{if(v.estado_pago!=='confirmado')return false;const d=new Date(v.fecha);return d>=start&&d<=end;}).reduce((a,v)=>a+v.total_pagado,0);
+      const total=DB.ventas.filter(v=>{if(v.estado_pago!=='confirmado')return false;const d=new Date(v.fecha);return d>=start&&d<=end;}).reduce((a,v)=>a+ventaNeta(v),0);
       items.push({label,total,active:i===0});
     }
   }
@@ -1311,7 +1313,7 @@ function renderVentas() {
   const ventasPage = ventas.slice((_ventasPage-1)*VENTAS_PAGE_SIZE, _ventasPage*VENTAS_PAGE_SIZE);
   tEl.innerHTML=ventas.length===0?'<div class="empty"><div class="empty-icon">🛒</div><h3>Sin ventas</h3></div>':`
     <table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Total</th><th>Margen</th><th>Cashback</th><th>Pago</th><th>Recibido</th><th>Envío</th><th></th></tr></thead><tbody>
-    ${ventasPage.map(v=>{const c=getCliente(v.id_cliente);const m=v.total_pagado>0?(v.total_pagado-(v.costo_productos||0))/v.total_pagado*100:0;const cb=v.cashback_generado||0;
+    ${ventasPage.map(v=>{const c=getCliente(v.id_cliente);const _vn=ventaNeta(v);const m=_vn>0?(_vn-(v.costo_productos||0))/_vn*100:0;const cb=v.cashback_generado||0;
     return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span></td><td class="fw-600">${fmt(v.total_pagado)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
     </tbody></table>
     ${paginationControlsHTML(_ventasPage, totalPagesV, 'goToVentasPage')}`;
@@ -2397,6 +2399,7 @@ async function guardarDevolucion(){
   // Financial effect
   if(tipo==='reembolso'){
     v.total_pagado = Math.max(0, (v.total_pagado||0) - monto);
+    v.subtotal_productos = Math.max(0, ventaNeta(v) - monto);
     v.tiene_devolucion = true;
   } else if(tipo==='nota_credito'){
     const c=getCliente(v.id_cliente);
@@ -2649,7 +2652,7 @@ function buildContext(){
   const historico = meses.map(m => {
     const ventasMes = DB.ventas.filter(v => v.estado_pago==='confirmado' && (v.fecha||'').startsWith(m));
     const gastosMes = DB.gastos.filter(g => (g.fecha||'').startsWith(m));
-    const ingMes = ventasMes.reduce((a,v)=>a+(v.total_pagado||0),0);
+    const ingMes = ventasMes.reduce((a,v)=>a+ventaNeta(v),0);
     const costoMes = ventasMes.reduce((a,v)=>a+(v.costo_productos||0),0);
     const gastoMes = gastosMes.reduce((a,g)=>a+(g.monto||0),0);
     return `${m}: ventas ${fmt(ingMes)} (${ventasMes.length} pedidos), gastos ${fmt(gastoMes)}, utilidad ${fmt(ingMes-costoMes-gastoMes)}`;
