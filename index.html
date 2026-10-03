@@ -173,7 +173,7 @@ textarea{resize:vertical;min-height:80px}
   /* ── Two-col grids → single col ── */
   .grid-2{grid-template-columns:1fr;gap:12px}
   /* ── Forms: stack all rows ── */
-  .form-row{grid-template-columns:1fr;gap:10px}
+  .form-row,.form-row-3{grid-template-columns:1fr;gap:10px}
   /* ── Modals: full screen on mobile ── */
   .modal-overlay{padding:0;align-items:flex-end}
   .modal,.modal-lg{max-width:100%;border-radius:12px 12px 0 0;max-height:92vh}
@@ -650,8 +650,9 @@ textarea{resize:vertical;min-height:80px}
         <div id="v-cliente-dropdown" style="display:none;position:absolute;z-index:80;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);max-height:200px;overflow-y:auto;width:100%;box-shadow:0 4px 16px rgba(0,0,0,.12);margin-top:2px"></div>
       </div>
       <div class="form-group"><label>Productos</label><div id="venta-items"></div><button class="btn btn-secondary btn-sm" onclick="addVentaItem()" style="margin-top:8px">+ Agregar producto</button></div>
-      <div class="form-row">
-        <div class="form-group"><label>Costo de Envío (COP)</label><input type="number" id="v-envio" value="0" oninput="calcTotalVenta()"></div>
+      <div class="form-row-3">
+        <div class="form-group"><label>Costo de Transporte (COP)</label><input type="number" id="v-envio" value="0" oninput="calcTotalVenta()"></div>
+        <div class="form-group"><label>Transporte pagado por</label><select id="v-transporte-por" onchange="calcTotalVenta()"><option value="cliente">Cliente</option><option value="frescura">Frescura</option></select></div>
         <div class="form-group"><label>Descuento (COP)</label><input type="number" id="v-descuento" value="0" oninput="calcTotalVenta()"></div>
       </div>
       <div class="form-row">
@@ -915,6 +916,13 @@ function _applyDB(data) {
   });
   DB = data;
   recalcCashbackHistorico();
+}
+
+// Transporte: devuelve quién lo paga y cuánto se le cobra al cliente en el total.
+// Si lo paga el cliente, entra a total_pagado; si lo paga Frescura, no.
+function calcTransporteVenta(envio, por) {
+  const _por = envio !== 0 ? (por || 'cliente') : '';
+  return { por: _por, cobrado: _por === 'cliente' ? envio : 0 };
 }
 
 async function loadDB() {
@@ -1355,7 +1363,8 @@ function editVenta(id){
   document.getElementById('btn-guardar-venta').textContent='Actualizar Venta';
   document.getElementById('v-fecha').value=v.fecha;
   document.getElementById('v-canal').value=v.canal_venta;
-  document.getElementById('v-envio').value=v.costo_envio||0;
+  document.getElementById('v-envio').value=v.costo_transporte||v.costo_envio||0;
+  document.getElementById('v-transporte-por').value=v.transporte_pagado_por||'cliente';
   document.getElementById('v-descuento').value=v.descuento||0;
   document.getElementById('v-estado-pago').value=v.estado_pago;
   document.getElementById('v-estado-envio').value=v.estado_envio||'preparando';
@@ -1414,6 +1423,9 @@ function updateVenta(id){
   });
   if(!valid||items.length===0){if(valid)alert('Agrega al menos un producto');return;}
   const envio=parseFloat(document.getElementById('v-envio').value)||0;
+  const _tr=calcTransporteVenta(envio, document.getElementById('v-transporte-por').value);
+  const _por=_tr.por;
+  const envioCobrado=_tr.cobrado;
   const desc=parseFloat(document.getElementById('v-descuento').value)||0;
   const cid=document.getElementById('v-cliente').value;
   const metodos=Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value);
@@ -1422,11 +1434,11 @@ function updateVenta(id){
   v.canal_venta=document.getElementById('v-canal').value;
   v.total_bruto=totalBruto;
   v.descuento=desc;
-  v.costo_envio=envio;
+  v.costo_envio=envioCobrado;
   v.subtotal_productos=totalBruto-desc;
   v.costo_transporte=envio;
-  if(v.transporte_pagado_por===undefined)v.transporte_pagado_por='';
-  v.total_pagado=totalBruto+envio-desc;
+  v.transporte_pagado_por=_por;
+  v.total_pagado=totalBruto+envioCobrado-desc;
   v.metodo_pago=metodos.join(' + ')||'No especificado';
   v.estado_pago=document.getElementById('v-estado-pago').value;
   v.estado_envio=document.getElementById('v-estado-envio').value||'preparando';
@@ -2107,6 +2119,7 @@ function openModalVenta(){
   document.getElementById('btn-guardar-venta').textContent='Guardar Venta';
   document.getElementById('v-fecha').value=today();
   document.getElementById('v-envio').value=0;
+  document.getElementById('v-transporte-por').value='cliente';
   document.getElementById('v-descuento').value=0;
   document.querySelectorAll('#v-pago-checks input').forEach(cb=>cb.checked=false);
   document.getElementById('venta-items').innerHTML='';
@@ -2231,11 +2244,12 @@ function calcTotalVenta(){
   });
   const envio=parseFloat(document.getElementById('v-envio')?.value)||0;
   const desc=parseFloat(document.getElementById('v-descuento')?.value)||0;
-  const total=subtotal+envio-desc;
+  const _trPrev=calcTransporteVenta(envio, document.getElementById('v-transporte-por')?.value);
+  const total=subtotal+_trPrev.cobrado-desc;
   const margen=total>0?(total-costoTotal)/total*100:0;
   const cb=Math.floor(cashbackBase*0.05);
   document.getElementById('v-subtotal').textContent=fmt(subtotal);
-  document.getElementById('v-envio-display').textContent=fmt(envio);
+  document.getElementById('v-envio-display').textContent=(_trPrev.por==='frescura')?('Asume Frescura ('+fmt(envio)+')'):fmt(_trPrev.cobrado);
   document.getElementById('v-descuento-display').textContent='-'+fmt(desc);
   document.getElementById('v-total-display').textContent=fmt(total);
   document.getElementById('v-costo-display').textContent=fmt(costoTotal);
@@ -2289,11 +2303,14 @@ function saveVenta(){
   });
   if(!valid||items.length===0){if(valid)alert('Agrega al menos un producto');return;}
   const envio=parseFloat(document.getElementById('v-envio').value)||0;
+  const _tr=calcTransporteVenta(envio, document.getElementById('v-transporte-por').value);
+  const _por=_tr.por;
+  const envioCobrado=_tr.cobrado;
   const desc=parseFloat(document.getElementById('v-descuento').value)||0;
   const cid=document.getElementById('v-cliente').value;
   const vid=uid('VTA');
   items.forEach(i=>i.id_venta=vid);
-  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,total_bruto:totalBruto,descuento:desc,costo_envio:envio,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:'',total_pagado:totalBruto+envio-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
+  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,total_bruto:totalBruto,descuento:desc,costo_envio:envioCobrado,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:_por,total_pagado:totalBruto+envioCobrado-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
   const cb=calcCashback(cid, desc, items);
   venta.cashback_generado=cb;
   // Apply cashback discount if used
