@@ -1071,6 +1071,15 @@ const getVentaDetalle = vid => DB.detalle_ventas.filter(d=>d.id_venta===vid);
 // Venta "neta" para reportes: solo productos (sin transporte). Fallback a total_pagado si falta el campo.
 const ventaNeta = v => (v.subtotal_productos !== undefined ? (v.subtotal_productos||0) : (v.total_pagado||0));
 const totalVentas = arr => arr.reduce((a,v)=>a+ventaNeta(v),0);
+// Celda "Venta" de las tablas: subtotal de productos y, debajo, lo que se cobró de envío (total_pagado - subtotal).
+function htmlVentaFila(v) {
+  const extra = (v.total_pagado || 0) - ventaNeta(v);
+  let det = '';
+  if (extra > 0) det = '+ ' + fmt(extra) + ' envío';
+  else if (extra < 0) det = '− ' + fmt(-extra) + ' envío';
+  else if ((v.costo_transporte || 0) > 0) det = 'envío gratis';   // hubo transporte y lo asumió Frescura
+  return fmt(ventaNeta(v)) + (det ? `<div class="text-sm text-muted" style="font-weight:400">${det}</div>` : '');
+}
 const totalCosto = arr => arr.reduce((a,v)=>a+(v.costo_productos||0),0);
 const totalGastos = arr => arr.reduce((a,g)=>a+(g.monto||0),0);
 
@@ -1257,8 +1266,8 @@ function renderDashboard() {
   const recent=[...mv].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,6);
   const rEl=document.getElementById('recent-sales-table');
   rEl.innerHTML=recent.length===0?'<div class="empty"><div class="empty-icon">🛒</div><p>Registra tu primera venta</p></div>':`
-    <table><thead><tr><th>Fecha</th><th>Cliente</th><th>Total</th><th>Cashback</th><th>Envío</th></tr></thead><tbody>
-    ${recent.map(v=>{const c=getCliente(v.id_cliente);const cb=v.cashback_generado||0;return`<tr><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td class="fw-600">${fmt(v.total_pagado)}</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td>${{preparando:'<span class="badge badge-gold" style="font-size:10px">📦</span>',enviado:'<span class="badge badge-blue" style="font-size:10px">🚚</span>',entregado:'<span class="badge badge-green" style="font-size:10px">✅</span>',cancelado:'<span class="badge badge-red" style="font-size:10px">❌</span>'}[v.estado_envio||'preparando']}</td></tr>`}).join('')}
+    <table><thead><tr><th>Fecha</th><th>Cliente</th><th>Venta</th><th>Cashback</th><th>Envío</th></tr></thead><tbody>
+    ${recent.map(v=>{const c=getCliente(v.id_cliente);const cb=v.cashback_generado||0;return`<tr><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td class="fw-600">${htmlVentaFila(v)}</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td>${{preparando:'<span class="badge badge-gold" style="font-size:10px">📦</span>',enviado:'<span class="badge badge-blue" style="font-size:10px">🚚</span>',entregado:'<span class="badge badge-green" style="font-size:10px">✅</span>',cancelado:'<span class="badge badge-red" style="font-size:10px">❌</span>'}[v.estado_envio||'preparando']}</td></tr>`}).join('')}
     </tbody></table>`;
 
   const saEl=document.getElementById('stock-alerts-body');
@@ -1349,9 +1358,9 @@ function renderVentas() {
   if (_ventasPage < 1) _ventasPage = 1;
   const ventasPage = ventas.slice((_ventasPage-1)*VENTAS_PAGE_SIZE, _ventasPage*VENTAS_PAGE_SIZE);
   tEl.innerHTML=ventas.length===0?'<div class="empty"><div class="empty-icon">🛒</div><h3>Sin ventas</h3></div>':`
-    <table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Total</th><th>Margen</th><th>Cashback</th><th>Pago</th><th>Recibido</th><th>Envío</th><th></th></tr></thead><tbody>
+    <table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Venta</th><th>Margen</th><th>Cashback</th><th>Pago</th><th>Recibido</th><th>Envío</th><th></th></tr></thead><tbody>
     ${ventasPage.map(v=>{const c=getCliente(v.id_cliente);const _vn=ventaNeta(v);const m=_vn>0?(_vn-(v.costo_productos||0))/_vn*100:0;const cb=v.cashback_generado||0;
-    return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span></td><td class="fw-600">${fmt(v.total_pagado)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
+    return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span></td><td class="fw-600">${htmlVentaFila(v)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
     </tbody></table>
     ${paginationControlsHTML(_ventasPage, totalPagesV, 'goToVentasPage')}`;
 }
