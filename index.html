@@ -891,6 +891,37 @@ textarea{resize:vertical;min-height:80px}
   </div>
 </div>
 
+<!-- MODAL: COMPROBANTE DE VENTA -->
+<div class="modal-overlay" id="modal-factura" onclick="if(event.target===this)closeModal('modal-factura')">
+  <div class="modal modal-lg" style="max-width:680px;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <div class="modal-header" style="padding:16px 20px;margin-bottom:0;border-bottom:1px solid var(--border)">
+      <span class="modal-title" style="display:flex;align-items:center;gap:8px">
+        <span>🧾 Comprobante de Venta</span>
+        <span id="factura-modal-id" style="font-family:var(--font-mono);font-size:12px;color:var(--ink3)"></span>
+      </span>
+      <button class="modal-close" onclick="closeModal('modal-factura')">✕</button>
+    </div>
+    
+    <div class="modal-body" style="overflow-y:auto;padding:20px;background:#f5f3ef;flex:1">
+      <div id="comprobante-card" style="background:#fff;padding:28px 24px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.06);max-width:600px;margin:0 auto">
+        <!-- Contenido dinámico del comprobante -->
+      </div>
+      
+      <div id="factura-toast" style="display:none;max-width:600px;margin:14px auto 0 auto;background:#e8f4fd;border:1px solid #b6d4fe;border-radius:6px;padding:12px 16px;font-size:13px;color:#084298;line-height:1.5;text-align:center"></div>
+    </div>
+    
+    <div class="modal-footer" style="padding:14px 20px;border-top:1px solid var(--border);margin-top:0;justify-content:center;gap:10px;flex-wrap:wrap">
+      <button id="btn-modal-wa" class="btn" style="background:#25D366;border-color:#25D366;color:#fff;font-weight:600;display:inline-flex;align-items:center;gap:8px;padding:10px 22px" onclick="enviarComprobanteModal()">
+        <span>📲 Enviar por WhatsApp</span>
+      </button>
+      <button class="btn btn-secondary" onclick="imprimirFacturaModal()" style="display:inline-flex;align-items:center;gap:6px">
+        <span>🖨️ Imprimir / Guardar PDF</span>
+      </button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-factura')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════
 // EMBEDDED BACKUP DATA
@@ -1855,9 +1886,29 @@ function enviarComprobanteWhatsApp(id) {
   if (url) window.open(url, '_blank');
 }
 
+let _currentFacturaId = null;
+
+async function asegurarHtml2Canvas() {
+  if (typeof html2canvas !== 'undefined') return true;
+  return new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      s2.onload = () => resolve(true);
+      s2.onerror = () => resolve(false);
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s);
+  });
+}
+
 function generarFactura(id) {
   const v = DB.ventas.find(x => x.id === id);
   if (!v) return;
+  _currentFacturaId = id;
   const c = getCliente(v.id_cliente);
   const items = getVentaDetalle(id);
   const esClub = c?.club_frescura || false;
@@ -1865,26 +1916,20 @@ function generarFactura(id) {
   const cbTotal = c ? (c.cashback || 0) : 0;
   const cbHip = calcCashbackHipotetico(v, items);
   const fmt2 = n => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', minimumFractionDigits:0}).format(n||0);
-  const urlWA = getWhatsAppComprobanteUrl(id);
-  const textoWA = getWhatsAppComprobanteTexto(id);
-  let tel = c?.telefono ? c.telefono.replace(/\D/g, '') : '';
-  if (tel && tel.length === 10 && tel.startsWith('3')) {
-    tel = '57' + tel;
-  }
 
   const itemsHTML = items.map(d => {
     const p = getProducto(d.id_producto);
     return `<tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc">${p?.nombre || d.id_producto}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:center">${d.cantidad}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:right">${fmt2(d.precio_unitario)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:right;font-weight:600">${fmt2(d.subtotal)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;color:#1e1c18">${p?.nombre || d.id_producto}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:center;color:#1e1c18">${d.cantidad}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:right;color:#1e1c18">${fmt2(d.precio_unitario)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:right;font-weight:600;color:#1e1c18">${fmt2(d.subtotal)}</td>
     </tr>`;
   }).join('');
 
   const cashbackSection = esClub
-    ? `<div style="background:#f0e8f5;border:1px solid #c8a8d8;border-radius:6px;padding:16px 20px;margin-top:24px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    ? `<div style="background:#f0e8f5;border:1px solid #c8a8d8;border-radius:6px;padding:16px 20px;margin-top:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <span style="font-size:18px">💜</span>
           <span style="font-family:'Georgia',serif;font-size:15px;font-weight:700;color:#5a2d82">Club Frescura Natural</span>
         </div>
@@ -1906,7 +1951,7 @@ function generarFactura(id) {
             </div>`
         }
       </div>`
-    : `<div style="background:#f5f2ed;border:1px solid #c8b89a;border-left:3px solid #8a6c3a;border-radius:6px;padding:16px 20px;margin-top:24px">
+    : `<div style="background:#f5f2ed;border:1px solid #c8b89a;border-left:3px solid #8a6c3a;border-radius:6px;padding:16px 20px;margin-top:20px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <span style="font-size:18px">🌿</span>
           <span style="font-family:'Georgia',serif;font-size:14px;font-weight:700;color:#8a6c3a">¡Únete al Club Frescura Natural!</span>
@@ -1918,226 +1963,223 @@ function generarFactura(id) {
         </div>
       </div>`;
 
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Comprobante ${v.id} - Frescura Natural</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Outfit',sans-serif; font-size:13px; color:#1e1c18; background:#f5f3ef; padding:24px 16px; margin:0 auto; }
-  #comprobante-card { background:#fff; padding:32px 28px; max-width:600px; margin:0 auto; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
-  @media print {
-    body { padding:0; background:#fff; }
-    #comprobante-card { box-shadow:none; padding:15px; border-radius:0; }
-    .no-print { display:none !important; }
-    @page { margin:10mm; size:A4; }
-  }
-  .actions-bar { margin:24px auto 0 auto; max-width:600px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
-  .btn-action { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; padding:12px 22px; border-radius:6px; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; cursor:pointer; text-decoration:none; transition:opacity 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
-  .btn-action:hover { opacity:0.9; }
-  .btn-wa { background:#25D366; color:#fff; }
-  .btn-print { background:#5a7a5c; color:#fff; }
-  .btn-close { background:#e8e4dc; color:#4a4640; border:1px solid #d4cebe; }
-  .toast-banner { display:none; max-width:600px; margin:16px auto 0 auto; background:#e8f4fd; border:1px solid #b6d4fe; border-radius:6px; padding:12px 16px; font-size:13px; color:#084298; line-height:1.5; text-align:center; }
-</style>
-</head>
-<body>
-
-<div id="comprobante-card">
-  <!-- HEADER -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:2px solid #1e1c18;margin-bottom:24px">
-    <div>
-      <div style="font-family:'Georgia',serif;font-size:26px;font-weight:700;color:#1e1c18;letter-spacing:-0.5px">Frescura Natural</div>
-      <div style="font-size:11px;color:#8a847a;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Cosméticos Artesanales</div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:11px;color:#8a847a;letter-spacing:1px;text-transform:uppercase">Comprobante de Venta</div>
-      <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:600;margin-top:4px">${v.id}</div>
-      <div style="font-size:12px;color:#4a4640;margin-top:2px">${v.fecha}</div>
-    </div>
-  </div>
-
-  <!-- DATOS GENERALES -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
-    <div>
-      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Cliente</div>
-      <div style="font-weight:600;font-size:14px">${c?.nombre || 'Cliente no registrado'}</div>
-      ${c?.telefono ? `<div style="color:#4a4640;font-size:12px;margin-top:2px">${c.telefono}</div>` : ''}
-      ${c?.ciudad ? `<div style="color:#4a4640;font-size:12px">${c.ciudad}</div>` : ''}
-      ${c?.direccion ? `<div style="color:#4a4640;font-size:12px">${c.direccion}</div>` : ''}
-    </div>
-    <div>
-      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Detalles</div>
-      <div style="font-size:12px;color:#4a4640;line-height:1.8">
-        Canal: <strong>${v.canal_venta}</strong><br>
-        Pago: <strong>${v.metodo_pago}</strong><br>
-        Estado: <strong style="color:#5a7a5c">✓ Confirmado</strong>
+  const cardHTML = `
+    <!-- HEADER -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:2px solid #1e1c18;margin-bottom:20px">
+      <div>
+        <div style="font-family:'Georgia',serif;font-size:24px;font-weight:700;color:#1e1c18;letter-spacing:-0.5px">Frescura Natural</div>
+        <div style="font-size:11px;color:#8a847a;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Cosméticos Artesanales</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#8a847a;letter-spacing:1px;text-transform:uppercase">Comprobante de Venta</div>
+        <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:600;margin-top:4px;color:#1e1c18">${v.id}</div>
+        <div style="font-size:12px;color:#4a4640;margin-top:2px">${v.fecha}</div>
       </div>
     </div>
-  </div>
 
-  <!-- TABLA DE PRODUCTOS -->
-  <table style="width:100%;border-collapse:collapse;margin-bottom:0">
-    <thead>
-      <tr style="background:#f5f2ed">
-        <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Producto</th>
-        <th style="padding:10px 12px;text-align:center;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Cant.</th>
-        <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Precio</th>
-        <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Subtotal</th>
-      </tr>
-    </thead>
-    <tbody>${itemsHTML}</tbody>
-  </table>
-
-  <!-- TOTALES -->
-  <div style="margin-top:0;border-top:2px solid #1e1c18;padding-top:12px">
-    ${(() => { const e = lineaEnvioComprobante(v); return e ? `
-    <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#4a4640">
-      <span>${e.etiqueta}</span>${e.gratis ? '<span style="color:#5a7a5c;font-weight:600">GRATIS</span>' : `<span>${fmt2(e.monto)}</span>`}
-    </div>` : ''; })()}
-    ${v.descuento > 0 ? `
-    <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#9b3a3a">
-      <span>Descuento</span><span>-${fmt2(v.descuento)}</span>
-    </div>` : ''}
-    <div style="display:flex;justify-content:space-between;padding:10px 12px;font-size:16px;font-weight:700;background:#f5f2ed;border-radius:4px;margin-top:4px">
-      <span>Total Pagado</span>
-      <span style="font-family:'Georgia',serif;font-size:20px">${fmt2(v.total_pagado)}</span>
+    <!-- DATOS GENERALES -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <div>
+        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Cliente</div>
+        <div style="font-weight:600;font-size:14px;color:#1e1c18">${c?.nombre || 'Cliente no registrado'}</div>
+        ${c?.telefono ? `<div style="color:#4a4640;font-size:12px;margin-top:2px">${c.telefono}</div>` : ''}
+        ${c?.ciudad ? `<div style="color:#4a4640;font-size:12px">${c.ciudad}</div>` : ''}
+        ${c?.direccion ? `<div style="color:#4a4640;font-size:12px">${c.direccion}</div>` : ''}
+      </div>
+      <div>
+        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Detalles</div>
+        <div style="font-size:12px;color:#4a4640;line-height:1.8">
+          Canal: <strong style="color:#1e1c18">${v.canal_venta}</strong><br>
+          Pago: <strong style="color:#1e1c18">${v.metodo_pago}</strong><br>
+          Estado: <strong style="color:#5a7a5c">✓ Confirmado</strong>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <!-- CASHBACK SECTION -->
-  ${cashbackSection}
+    <!-- TABLA DE PRODUCTOS -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:0">
+      <thead>
+        <tr style="background:#f5f2ed">
+          <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Producto</th>
+          <th style="padding:10px 12px;text-align:center;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Cant.</th>
+          <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Precio</th>
+          <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>${itemsHTML}</tbody>
+    </table>
 
-  <!-- FOOTER -->
-  <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e8e4dc;text-align:center;font-size:11px;color:#8a847a;line-height:1.8">
-    Gracias por tu compra 🌿 · Frescura Natural Cosméticos · Hecho con amor en Colombia<br>
-    <span style="font-size:10px">Este documento es un comprobante de venta · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
-  </div>
-</div>
+    <!-- TOTALES -->
+    <div style="margin-top:0;border-top:2px solid #1e1c18;padding-top:12px">
+      ${(() => { const e = lineaEnvioComprobante(v); return e ? `
+      <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#4a4640">
+        <span>${e.etiqueta}</span>${e.gratis ? '<span style="color:#5a7a5c;font-weight:600">GRATIS</span>' : `<span>${fmt2(e.monto)}</span>`}
+      </div>` : ''; })()}
+      ${v.descuento > 0 ? `
+      <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#9b3a3a">
+        <span>Descuento</span><span>-${fmt2(v.descuento)}</span>
+      </div>` : ''}
+      <div style="display:flex;justify-content:space-between;padding:10px 12px;font-size:15px;font-weight:700;background:#f5f2ed;border-radius:4px;margin-top:4px;color:#1e1c18">
+        <span>Total Pagado</span>
+        <span style="font-family:'Georgia',serif;font-size:18px">${fmt2(v.total_pagado)}</span>
+      </div>
+    </div>
 
-<div id="wa-toast" class="toast-banner no-print"></div>
+    <!-- CASHBACK SECTION -->
+    ${cashbackSection}
 
-<!-- ACTION BUTTONS -->
-<div class="actions-bar no-print">
-  <button id="btn-wa" class="btn-action btn-wa" onclick="compartirWhatsApp()">📲 Enviar por WhatsApp</button>
-  <button class="btn-action btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
-  <button class="btn-action btn-close" onclick="window.close()">Cerrar</button>
-</div>
+    <!-- FOOTER -->
+    <div style="margin-top:24px;padding-top:14px;border-top:1px solid #e8e4dc;text-align:center;font-size:11px;color:#8a847a;line-height:1.8">
+      Gracias por tu compra 🌿 · Frescura Natural Cosméticos · Hecho con amor en Colombia<br>
+      <span style="font-size:10px">Este documento es un comprobante de venta · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
+    </div>
+  `;
 
-</body>
-</html>`;
+  document.getElementById('comprobante-card').innerHTML = cardHTML;
+  document.getElementById('factura-modal-id').textContent = v.id;
+  const toast = document.getElementById('factura-toast');
+  if (toast) { toast.style.display = 'none'; toast.innerHTML = ''; }
+  const btn = document.getElementById('btn-modal-wa');
+  if (btn) { btn.innerHTML = '<span>📲 Enviar por WhatsApp</span>'; btn.disabled = false; }
 
-  const w = window.open('', '_blank', 'width=700,height=900');
-  if (!w) {
-    if (confirm('No se pudo abrir la ventana del comprobante (ventanas emergentes bloqueadas). ¿Deseas abrir WhatsApp directamente con el texto del comprobante?')) {
-      enviarComprobanteWhatsApp(id);
-    }
-    return;
+  openModal('modal-factura');
+}
+
+async function enviarComprobanteModal() {
+  if (!_currentFacturaId) return;
+  const v = DB.ventas.find(x => x.id === _currentFacturaId);
+  if (!v) return;
+
+  const btn = document.getElementById('btn-modal-wa');
+  const toast = document.getElementById('factura-toast');
+  const originalText = btn ? btn.innerHTML : '<span>📲 Enviar por WhatsApp</span>';
+  if (btn) {
+    btn.innerHTML = '<span>⏳ Capturando comprobante...</span>';
+    btn.disabled = true;
   }
-  w.document.write(html);
-  w.document.close();
+  if (toast) { toast.style.display = 'none'; }
 
-  w.compartirWhatsApp = async function() {
-    const btn = w.document.getElementById('btn-wa');
-    const toast = w.document.getElementById('wa-toast');
-    const originalText = btn ? btn.innerHTML : '📲 Enviar por WhatsApp';
-    if (btn) {
-      btn.innerHTML = '⏳ Preparando comprobante...';
-      btn.disabled = true;
+  const textoWA = getWhatsAppComprobanteTexto(v.id);
+  const urlWA = getWhatsAppComprobanteUrl(v.id);
+  const fileName = `Comprobante-${v.id}.png`;
+
+  try {
+    const card = document.getElementById('comprobante-card');
+    if (!card) throw new Error('Elemento de comprobante no encontrado');
+
+    await asegurarHtml2Canvas();
+    if (typeof html2canvas === 'undefined') {
+      throw new Error('html2canvas no disponible');
     }
 
-    const fileName = `Comprobante-${v.id}.png`;
+    const canvas = await html2canvas(card, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    });
 
-    try {
-      const card = w.document.getElementById('comprobante-card');
-      let blob = null;
+    let blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) {
+      const dataUrl = canvas.toDataURL('image/png');
+      const binStr = atob(dataUrl.split(',')[1]);
+      const len = binStr.length;
+      const arr = new Uint8Array(len);
+      for (let i = 0; i < len; i++) arr[i] = binStr.charCodeAt(i);
+      blob = new Blob([arr], { type: 'image/png' });
+    }
 
-      const h2c = window.html2canvas || (w && w.html2canvas);
-      if (h2c && card) {
-        try {
-          const canvas = await h2c(card, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            logging: false
-          });
-          blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        } catch (errCanvas) {
-          console.warn('Error al capturar comprobante con html2canvas:', errCanvas);
+    const file = new File([blob], fileName, { type: 'image/png' });
+
+    // 1. Caso Móvil / PWA: Web Share API nativo con archivo adjunto
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try { await navigator.clipboard.writeText(textoWA); } catch(_) {}
         }
-      }
-
-      // 1. Caso Móvil / PWA: Web Share API con archivo adjunto
-      if (blob && (w.navigator.canShare || navigator.canShare)) {
-        const nav = w.navigator.canShare ? w.navigator : navigator;
-        const file = new File([blob], fileName, { type: 'image/png' });
-        if (nav.canShare({ files: [file] })) {
-          await nav.share({
-            files: [file],
-            title: `Comprobante ${v.id}`,
-            text: textoWA
-          });
+        await navigator.share({
+          files: [file],
+          title: `Comprobante ${v.id}`,
+          text: textoWA
+        });
+        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+        return;
+      } catch (errShare) {
+        if (errShare.name === 'AbortError') {
           if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
           return;
         }
+        console.warn('Fallo en navigator.share:', errShare);
       }
-
-      // 2. Caso Desktop: Copiar imagen al portapapeles + Descarga + Abrir WhatsApp Web
-      let copiado = false;
-      const clipNav = (w.navigator.clipboard && w.ClipboardItem) ? w.navigator : ((navigator.clipboard && window.ClipboardItem) ? navigator : null);
-      if (blob && clipNav) {
-        try {
-          const ItemClass = w.ClipboardItem || window.ClipboardItem;
-          await clipNav.clipboard.write([
-            new ItemClass({ 'image/png': blob })
-          ]);
-          copiado = true;
-        } catch (errClip) {
-          console.warn('Portapapeles no disponible:', errClip);
-        }
-      }
-
-      if (blob) {
-        try {
-          const a = w.document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = fileName;
-          w.document.body.appendChild(a);
-          a.click();
-          setTimeout(() => {
-            try { w.document.body.removeChild(a); } catch(_) {}
-            URL.revokeObjectURL(a.href);
-          }, 2000);
-        } catch (errDl) {
-          console.warn('Descarga no disponible:', errDl);
-        }
-      }
-
-      if (toast) {
-        toast.style.display = 'block';
-        toast.innerHTML = copiado 
-          ? '📋 <strong>¡Comprobante copiado al portapapeles y descargado!</strong><br>En la ventana de WhatsApp Web que se abrirá, presiona <strong>Ctrl + V</strong> para pegar la imagen.'
-          : '📥 <strong>Comprobante descargado en tu equipo.</strong><br>En WhatsApp Web puedes adjuntar la imagen descargada en el chat.';
-      }
-
-      setTimeout(() => {
-        w.open(urlWA, '_blank') || window.open(urlWA, '_blank');
-        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
-      }, 900);
-
-    } catch (err) {
-      if (err && err.name === 'AbortError') {
-        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
-        return;
-      }
-      console.error('Error al compartir WhatsApp:', err);
-      w.open(urlWA, '_blank') || window.open(urlWA, '_blank');
-      if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
     }
-  };
+
+    // 2. Caso Desktop / Navegadores sin Web Share de archivos:
+    let copiado = false;
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+        copiado = true;
+      } catch (errClip) {
+        console.warn('Portapapeles no disponible:', errClip);
+      }
+    }
+
+    try {
+      const urlBlob = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = urlBlob;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try { document.body.removeChild(a); } catch(_) {}
+        URL.revokeObjectURL(urlBlob);
+      }, 2000);
+    } catch (errDl) {
+      console.warn('Error en descarga:', errDl);
+    }
+
+    if (toast) {
+      toast.style.display = 'block';
+      toast.innerHTML = copiado 
+        ? `📋 <strong>¡Comprobante copiado al portapapeles y descargado!</strong><br>En la ventana de WhatsApp Web que se abrirá, presiona <strong>Ctrl + V</strong> para pegar la imagen adjunta en el chat.`
+        : `📥 <strong>Comprobante descargado en tu equipo (${fileName}).</strong><br>En WhatsApp Web puedes adjuntar la imagen descargada en el chat.`;
+    }
+
+    setTimeout(() => {
+      window.open(urlWA, '_blank');
+      if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+    }, 900);
+
+  } catch (err) {
+    console.error('Error al capturar o enviar comprobante:', err);
+    window.open(urlWA, '_blank');
+    if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+  }
+}
+
+function imprimirFacturaModal() {
+  const card = document.getElementById('comprobante-card');
+  if (!card) return;
+  const printWindow = window.open('', '_blank', 'width=700,height=900');
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+  printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comprobante</title><style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Outfit',sans-serif; font-size:13px; color:#1e1c18; padding:30px; background:#fff; }
+    @page { margin:10mm; size:A4; }
+  </style></head><body>` + card.innerHTML + `</body></html>`);
+  printWindow.document.close();
+  setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+  }, 400);
 }
 
 // ══════════════════════════════════════════════════════════
