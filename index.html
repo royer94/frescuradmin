@@ -231,6 +231,7 @@ textarea{resize:vertical;min-height:80px}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 <script>(function(){try{var t=localStorage.getItem('fn_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
@@ -311,6 +312,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="page-title" id="page-title">Dashboard</div>
     <div class="topbar-right">
       <span class="text-sm text-muted" id="current-date"></span>
+      <button class="btn btn-secondary btn-sm" onclick="recargarDatosNube()" id="btn-sync-cloud" title="Sincronizar datos con la nube" style="transition:transform .3s ease">🔄</button>
       <button class="btn btn-secondary btn-sm" onclick="toggleTheme()" id="theme-toggle-btn" title="Cambiar tema">🌙</button>
       <button class="btn btn-secondary btn-sm" onclick="openMetaModal()">🎯 Meta</button>
       <button class="btn btn-primary btn-sm" id="topbar-action" onclick="quickAdd()">+ Registrar Venta</button>
@@ -1109,69 +1111,68 @@ async function autoMigrateToCollections(source) {
   }
 }
 
-// ── Carga de Base de Datos (Prioriza Colecciones Modulares de Firestore) ──
+// ── Carga de Base de Datos (Sincronización en la Nube con Firestore) ──
 async function loadDB() {
   document.getElementById('page-title').textContent = 'Cargando datos...';
   try {
-    const prodsSnap = await _COL_PRODS.get();
-    
-    if (!prodsSnap.empty) {
-      // Colecciones ya pobladas: cargar en paralelo
-      const [ventasSnap, detSnap, cliSnap, gastosSnap, movsSnap, muestrasSnap, devSnap, configSnap] = await Promise.all([
-        _COL_VENTAS.get(),
-        _COL_DETALLES.get(),
-        _COL_CLIENTES.get(),
-        _COL_GASTOS.get(),
-        _COL_MOVS.get(),
-        _COL_MUESTRAS.get(),
-        _COL_DEVOLS.get(),
-        _COL_CONFIG.doc('general').get()
-      ]);
+    let cloudData = null;
 
-      const loaded = {
-        productos: prodsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        ventas: ventasSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        detalle_ventas: detSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        clientes: cliSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        gastos: gastosSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        movimientos: movsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        muestras: muestrasSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        devoluciones: devSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        meta_mensual: configSnap.exists ? (configSnap.data().meta_mensual || 3000000) : 3000000
-      };
+    // 1) Leer siempre de admin/db primero (fuente unificada para Desktop y Móvil)
+    try {
+      const snapLegacy = await _DOC_LEGACY.get();
+      if (snapLegacy.exists && snapLegacy.data()?.data) {
+        cloudData = JSON.parse(snapLegacy.data().data);
+        console.log('[Firebase] Datos cargados con éxito desde Firestore (admin/db) ✓');
+      }
+    } catch(eLegacy) {
+      console.warn('[Firebase] Lectura admin/db falló, intentando colecciones modulares:', eLegacy.message);
+    }
 
-      _applyDB(loaded);
-      localStorage.setItem('frescura_db', JSON.stringify(DB));
-      localStorage.setItem('frescura_db_version', DB_VERSION);
-      console.log('[Firebase] Datos cargados con éxito desde colecciones individuales de Firestore ✓');
-    } else {
-      // Primera vez o migración necesaria desde admin/db o localStorage
-      let legacyData = null;
+    // 2) Si admin/db no estaba disponible o estaba vacío, consultar colecciones modulares
+    if (!cloudData) {
       try {
-        const snap = await _DOC_LEGACY.get();
-        if (snap.exists && snap.data()?.data) {
-          legacyData = JSON.parse(snap.data().data);
-          console.log('[Firebase] Encontrados datos previos en admin/db para migrar');
+        const prodsSnap = await _COL_PRODS.get();
+        if (!prodsSnap.empty) {
+          const [ventasSnap, detSnap, cliSnap, gastosSnap, movsSnap, muestrasSnap, devSnap, configSnap] = await Promise.all([
+            _COL_VENTAS.get(),
+            _COL_DETALLES.get(),
+            _COL_CLIENTES.get(),
+            _COL_GASTOS.get(),
+            _COL_MOVS.get(),
+            _COL_MUESTRAS.get(),
+            _COL_DEVOLS.get(),
+            _COL_CONFIG.doc('general').get()
+          ]);
+
+          cloudData = {
+            productos: prodsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            ventas: ventasSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            detalle_ventas: detSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            clientes: cliSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            gastos: gastosSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            movimientos: movsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            muestras: muestrasSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            devoluciones: devSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            meta_mensual: configSnap.exists ? (configSnap.data().meta_mensual || 3000000) : 3000000
+          };
+          console.log('[Firebase] Datos cargados con éxito desde colecciones individuales de Firestore ✓');
         }
-      } catch(e) {}
-
-      if (!legacyData) {
-        const local = localStorage.getItem('frescura_db');
-        if (local) {
-          try { legacyData = JSON.parse(local); } catch(e) {}
-        }
+      } catch(eCols) {
+        console.warn('[Firebase] Error leyendo colecciones modulares:', eCols.message);
       }
+    }
 
-      if (!legacyData) {
-        legacyData = JSON.parse(JSON.stringify(BACKUP_DATA));
-      }
-
-      _applyDB(legacyData);
+    if (cloudData) {
+      _applyDB(cloudData);
       localStorage.setItem('frescura_db', JSON.stringify(DB));
       localStorage.setItem('frescura_db_version', DB_VERSION);
-
-      // Ejecutar auto-migración hacia las colecciones de Firestore
-      await autoMigrateToCollections(DB);
+      // Mantener sincronizadas las colecciones modulares en segundo plano
+      autoMigrateToCollections(DB).catch(() => {});
+    } else {
+      // Si no hay datos en la nube, usar respaldo offline
+      const local = localStorage.getItem('frescura_db');
+      if (local) { _applyDB(JSON.parse(local)); }
+      else { _applyDB(JSON.parse(JSON.stringify(BACKUP_DATA))); }
     }
   } catch(e) {
     console.warn('[Firebase] loadDB error, usando respaldo offline:', e.message);
@@ -1184,6 +1185,35 @@ async function loadDB() {
     }
   }
 }
+
+// Recarga manual y automática de datos desde la nube (ideal para WebApp / PWA móvil)
+async function recargarDatosNube(silent=false) {
+  const btn = document.getElementById('btn-sync-cloud');
+  if (btn) btn.style.transform = 'rotate(180deg)';
+  try {
+    await loadDB();
+    const activeNav = document.querySelector('.nav-item.active');
+    const activePage = activeNav?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || 'dashboard';
+    renderPage(activePage);
+    if (!silent) showAdminToast('✓ Datos sincronizados con la nube');
+  } catch(e) {
+    if (!silent) showAdminToast('⚠️ Error al sincronizar: ' + e.message);
+  } finally {
+    if (btn) setTimeout(() => btn.style.transform = 'none', 300);
+  }
+}
+
+// Actualización automática al volver a la pestaña o WebApp móvil
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && _currentRole === 'admin') {
+    recargarDatosNube(true);
+  }
+});
+window.addEventListener('focus', () => {
+  if (_currentRole === 'admin') {
+    recargarDatosNube(true);
+  }
+});
 
 // ── Sincronizadores Granulares para Firestore (Escrituras Atómicas por Documento) ──
 async function syncProductoToFirestore(p, isDelete=false) {
@@ -1236,14 +1266,16 @@ async function syncDevolucionToFirestore(d) {
   try { await _COL_DEVOLS.doc(d.id).set(d); } catch(e) { console.warn('[syncDev]', e.message); }
 }
 
-// Sincronización general (guarda offline en localStorage y snapshot de respaldo en admin/db)
+// Sincronización general (guarda offline en localStorage y en la nube en Firestore)
 async function saveDB() {
   localStorage.setItem('frescura_db', JSON.stringify(DB));
   try {
-    _DOC_LEGACY.set({ data: JSON.stringify(DB), version: DB_VERSION, updated: Date.now() }).catch(() => {});
+    await _DOC_LEGACY.set({ data: JSON.stringify(DB), version: DB_VERSION, updated: Date.now() });
     _COL_CONFIG.doc('general').set({ meta_mensual: DB.meta_mensual || 3000000 }).catch(() => {});
+    console.log('[Firebase] Datos guardados con éxito en la nube (Firestore) ✓');
   } catch(e) {
-    console.warn('[Firebase] saveDB snapshot warning:', e.message);
+    console.warn('[Firebase] saveDB error:', e.message);
+    showAdminToast('⚠️ Atención: No se pudo guardar en la nube (' + e.message + ')');
   }
 }
 
@@ -1585,7 +1617,7 @@ function renderVentas() {
   tEl.innerHTML=ventas.length===0?'<div class="empty"><div class="empty-icon">🛒</div><h3>Sin ventas</h3></div>':`
     <table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Venta</th><th>Margen</th><th>Cashback</th><th>Pago</th><th>Recibido</th><th>Envío</th><th></th></tr></thead><tbody>
     ${ventasPage.map(v=>{const c=getCliente(v.id_cliente);const _vn=ventaNeta(v);const m=_vn>0?(_vn-(v.costo_productos||0))/_vn*100:0;const cb=v.cashback_generado||0;
-    return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span></td><td class="fw-600">${htmlVentaFila(v)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button><button class="btn btn-xs btn-secondary" style="background:#e8f0e8;color:#5a7a5c;border-color:#a8c8a8" onclick="enviarComprobanteWhatsApp('${v.id}')" title="Enviar por WhatsApp">📲</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
+    return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span></td><td class="fw-600">${htmlVentaFila(v)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
     </tbody></table>
     ${paginationControlsHTML(_ventasPage, totalPagesV, 'goToVentasPage')}`;
 }
@@ -1731,7 +1763,9 @@ function updateVenta(id){
   });
   DB.detalle_ventas.push(...items);
   sincronizarGastoTransporte(v);
-  saveDB();closeModal('modal-venta');
+  saveDB();
+  syncVentaToFirestore(v, items).catch(e=>console.warn('[syncVenta edit]',e.message));
+  closeModal('modal-venta');
   if (v.dist_id) {
     _db.collection('pedidos_dist').doc(id).update({estado_envio:v.estado_envio, transportadora:v.transportadora, numero_guia:v.numero_guia})
       .catch((e) => console.warn('[sync envio edición] ', e.message));
@@ -1754,7 +1788,9 @@ function deleteVenta(id) {
     DB.movimientos=DB.movimientos.filter(m=>m.referencia!==id||m.tipo!=='venta'); // limpia también el historial de movimientos
     DB.ventas=DB.ventas.filter(x=>x.id!==id);
     DB.gastos=DB.gastos.filter(g=>!(g.id_venta===id&&g.categoria===CAT_GASTO_LOGISTICA)); // elimina el gasto de transporte ligado
-    saveDB();renderVentas();
+    saveDB();
+    syncVentaToFirestore({id}, [], true).catch(e=>console.warn('[syncVenta delete]',e.message));
+    renderVentas();
   }
 }
 
@@ -1776,59 +1812,47 @@ function calcCashbackHipotetico(v, items) {
   return Math.floor(base * 0.05);
 }
 
-// ── Enviar Comprobante por WhatsApp (Con soporte de transporte y Club Frescura) ──
-function enviarComprobanteWhatsApp(id) {
+// ── Enviar Comprobante por WhatsApp (Con adjunto de imagen y formato oficial) ──
+function getWhatsAppComprobanteTexto(id) {
   const v = DB.ventas.find(x => x.id === id);
-  if (!v) return;
+  if (!v) return '';
   const c = getCliente(v.id_cliente);
-  const items = getVentaDetalle(id);
+  const nombreCliente = (c && c.nombre) ? c.nombre.trim() : 'estimado/a cliente';
+
+  let estadoTexto = {
+    preparando: 'Preparando 📦',
+    enviado: 'Enviado 🚚',
+    entregado: 'Entregado ✅',
+    cancelado: 'Cancelado ❌'
+  }[v.estado_envio || 'preparando'] || 'Preparando 📦';
+
+  if (v.estado_envio === 'enviado' && v.numero_guia) {
+    estadoTexto += ` (${v.transportadora ? v.transportadora + ' ' : ''}#${v.numero_guia})`;
+  }
+
+  return `*FRESCURA NATURAL · COMPROBANTE DE VENTA*\n\n¡Hola *${nombreCliente}*! Muchas gracias por tu compra.\n\n*Estado entrega:* ${estadoTexto}\n\n¡Que disfrutes mucho tus productos naturales! Si tienes cualquier inquietud, estamos atentos por este mismo chat. 🍃✨`;
+}
+
+function getWhatsAppComprobanteUrl(id) {
+  const v = DB.ventas.find(x => x.id === id);
+  if (!v) return '';
+  const c = getCliente(v.id_cliente);
 
   let tel = c?.telefono ? c.telefono.replace(/\D/g, '') : '';
   if (tel && tel.length === 10 && tel.startsWith('3')) {
     tel = '57' + tel;
   }
 
-  const itemsTxt = items.map(d => {
-    const p = getProducto(d.id_producto);
-    return `• ${d.cantidad}x ${p?.nombre || d.id_producto} (${fmt(d.subtotal)})`;
-  }).join('\n');
+  const texto = getWhatsAppComprobanteTexto(id);
 
-  let texto = `🌿 *FRESCURA NATURAL · COMPROBANTE DE VENTA* 🌿\n\n`;
-  texto += `¡Hola *${c ? c.nombre : 'estimado/a cliente'}*! Muchas gracias por tu compra. Aquí tienes el detalle de tu pedido:\n\n`;
-  texto += `🧾 *Pedido:* ${v.num || v.id}\n`;
-  texto += `📅 *Fecha:* ${v.fecha}\n`;
-  texto += `🛍️ *Canal:* ${v.canal_venta}\n\n`;
-  texto += `*Productos:*
-${itemsTxt}\n\n`;
-  
-  const lineaEnv = lineaEnvioComprobante(v);
-  if (lineaEnv) {
-    if (lineaEnv.gratis) {
-      texto += `🚚 *Envío:* ¡GRATIS! (Asumido por Frescura Natural)\n`;
-    } else {
-      texto += `🚚 *${lineaEnv.etiqueta}:* ${fmt(lineaEnv.monto)}\n`;
-    }
-  }
-  if (v.descuento > 0) {
-    texto += `🏷️ *Descuento:* -${fmt(v.descuento)}\n`;
-  }
-  texto += `💰 *TOTAL PAGADO:* ${fmt(v.total_pagado)}\n`;
-  texto += `💳 *Método de pago:* ${v.metodo_pago}\n`;
-  texto += `📦 *Estado entrega:* ${{preparando:'Preparando 📦',enviado:'Enviado 🚚',entregado:'Entregado ✅',cancelado:'Cancelado ❌'}[v.estado_envio || 'preparando']}\n`;
-  if (v.transportadora || v.numero_guia) {
-    texto += `🚚 *Guía:* ${v.transportadora || ''} ${v.numero_guia ? '#' + v.numero_guia : ''}\n`;
-  }
-
-  if (c?.club_frescura) {
-    texto += `\n💜 *Club Frescura:* Generaste ${fmt(v.cashback_generado || 0)} de cashback. Tu saldo acumulado es *${fmt(c.cashback || 0)}* para tu próxima compra!`;
-  }
-
-  texto += `\n\n¡Que disfrutes mucho tus productos naturales! Si tienes cualquier inquietud, estamos atentos por este mismo chat. 🍃✨`;
-
-  const url = tel 
+  return tel 
     ? `https://api.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}` 
     : `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
-  window.open(url, '_blank');
+}
+
+function enviarComprobanteWhatsApp(id) {
+  const url = getWhatsAppComprobanteUrl(id);
+  if (url) window.open(url, '_blank');
 }
 
 function generarFactura(id) {
@@ -1841,6 +1865,12 @@ function generarFactura(id) {
   const cbTotal = c ? (c.cashback || 0) : 0;
   const cbHip = calcCashbackHipotetico(v, items);
   const fmt2 = n => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', minimumFractionDigits:0}).format(n||0);
+  const urlWA = getWhatsAppComprobanteUrl(id);
+  const textoWA = getWhatsAppComprobanteTexto(id);
+  let tel = c?.telefono ? c.telefono.replace(/\D/g, '') : '';
+  if (tel && tel.length === 10 && tel.startsWith('3')) {
+    tel = '57' + tel;
+  }
 
   const itemsHTML = items.map(d => {
     const p = getProducto(d.id_producto);
@@ -1892,105 +1922,222 @@ function generarFactura(id) {
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Comprobante ${v.id}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comprobante ${v.id} - Frescura Natural</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Outfit',sans-serif; font-size:13px; color:#1e1c18; background:#fff; padding:40px; max-width:600px; margin:0 auto; }
+  body { font-family:'Outfit',sans-serif; font-size:13px; color:#1e1c18; background:#f5f3ef; padding:24px 16px; margin:0 auto; }
+  #comprobante-card { background:#fff; padding:32px 28px; max-width:600px; margin:0 auto; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
   @media print {
-    body { padding:20px; }
+    body { padding:0; background:#fff; }
+    #comprobante-card { box-shadow:none; padding:15px; border-radius:0; }
     .no-print { display:none !important; }
-    @page { margin:15mm; size:A4; }
+    @page { margin:10mm; size:A4; }
   }
+  .actions-bar { margin:24px auto 0 auto; max-width:600px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .btn-action { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; padding:12px 22px; border-radius:6px; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; cursor:pointer; text-decoration:none; transition:opacity 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+  .btn-action:hover { opacity:0.9; }
+  .btn-wa { background:#25D366; color:#fff; }
+  .btn-print { background:#5a7a5c; color:#fff; }
+  .btn-close { background:#e8e4dc; color:#4a4640; border:1px solid #d4cebe; }
+  .toast-banner { display:none; max-width:600px; margin:16px auto 0 auto; background:#e8f4fd; border:1px solid #b6d4fe; border-radius:6px; padding:12px 16px; font-size:13px; color:#084298; line-height:1.5; text-align:center; }
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
-<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:2px solid #1e1c18;margin-bottom:24px">
-  <div>
-    <div style="font-family:'Georgia',serif;font-size:26px;font-weight:700;color:#1e1c18;letter-spacing:-0.5px">Frescura Natural</div>
-    <div style="font-size:11px;color:#8a847a;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Cosméticos Artesanales</div>
-  </div>
-  <div style="text-align:right">
-    <div style="font-size:11px;color:#8a847a;letter-spacing:1px;text-transform:uppercase">Comprobante de Venta</div>
-    <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:600;margin-top:4px">${v.id}</div>
-    <div style="font-size:12px;color:#4a4640;margin-top:2px">${v.fecha}</div>
-  </div>
-</div>
-
-<!-- DATOS GENERALES -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
-  <div>
-    <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Cliente</div>
-    <div style="font-weight:600;font-size:14px">${c?.nombre || 'Cliente no registrado'}</div>
-    ${c?.telefono ? `<div style="color:#4a4640;font-size:12px;margin-top:2px">${c.telefono}</div>` : ''}
-    ${c?.ciudad ? `<div style="color:#4a4640;font-size:12px">${c.ciudad}</div>` : ''}
-    ${c?.direccion ? `<div style="color:#4a4640;font-size:12px">${c.direccion}</div>` : ''}
-  </div>
-  <div>
-    <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Detalles</div>
-    <div style="font-size:12px;color:#4a4640;line-height:1.8">
-      Canal: <strong>${v.canal_venta}</strong><br>
-      Pago: <strong>${v.metodo_pago}</strong><br>
-      Estado: <strong style="color:#5a7a5c">✓ Confirmado</strong>
+<div id="comprobante-card">
+  <!-- HEADER -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:2px solid #1e1c18;margin-bottom:24px">
+    <div>
+      <div style="font-family:'Georgia',serif;font-size:26px;font-weight:700;color:#1e1c18;letter-spacing:-0.5px">Frescura Natural</div>
+      <div style="font-size:11px;color:#8a847a;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Cosméticos Artesanales</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px;color:#8a847a;letter-spacing:1px;text-transform:uppercase">Comprobante de Venta</div>
+      <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:600;margin-top:4px">${v.id}</div>
+      <div style="font-size:12px;color:#4a4640;margin-top:2px">${v.fecha}</div>
     </div>
   </div>
-</div>
 
-<!-- TABLA DE PRODUCTOS -->
-<table style="width:100%;border-collapse:collapse;margin-bottom:0">
-  <thead>
-    <tr style="background:#f5f2ed">
-      <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Producto</th>
-      <th style="padding:10px 12px;text-align:center;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Cant.</th>
-      <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Precio</th>
-      <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Subtotal</th>
-    </tr>
-  </thead>
-  <tbody>${itemsHTML}</tbody>
-</table>
+  <!-- DATOS GENERALES -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+    <div>
+      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Cliente</div>
+      <div style="font-weight:600;font-size:14px">${c?.nombre || 'Cliente no registrado'}</div>
+      ${c?.telefono ? `<div style="color:#4a4640;font-size:12px;margin-top:2px">${c.telefono}</div>` : ''}
+      ${c?.ciudad ? `<div style="color:#4a4640;font-size:12px">${c.ciudad}</div>` : ''}
+      ${c?.direccion ? `<div style="color:#4a4640;font-size:12px">${c.direccion}</div>` : ''}
+    </div>
+    <div>
+      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Detalles</div>
+      <div style="font-size:12px;color:#4a4640;line-height:1.8">
+        Canal: <strong>${v.canal_venta}</strong><br>
+        Pago: <strong>${v.metodo_pago}</strong><br>
+        Estado: <strong style="color:#5a7a5c">✓ Confirmado</strong>
+      </div>
+    </div>
+  </div>
 
-<!-- TOTALES -->
-<div style="margin-top:0;border-top:2px solid #1e1c18;padding-top:12px">
-  ${(() => { const e = lineaEnvioComprobante(v); return e ? `
-  <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#4a4640">
-    <span>${e.etiqueta}</span>${e.gratis ? '<span style="color:#5a7a5c;font-weight:600">GRATIS</span>' : `<span>${fmt2(e.monto)}</span>`}
-  </div>` : ''; })()}
-  ${v.descuento > 0 ? `
-  <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#9b3a3a">
-    <span>Descuento</span><span>-${fmt2(v.descuento)}</span>
-  </div>` : ''}
-  <div style="display:flex;justify-content:space-between;padding:10px 12px;font-size:16px;font-weight:700;background:#f5f2ed;border-radius:4px;margin-top:4px">
-    <span>Total Pagado</span>
-    <span style="font-family:'Georgia',serif;font-size:20px">${fmt2(v.total_pagado)}</span>
+  <!-- TABLA DE PRODUCTOS -->
+  <table style="width:100%;border-collapse:collapse;margin-bottom:0">
+    <thead>
+      <tr style="background:#f5f2ed">
+        <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Producto</th>
+        <th style="padding:10px 12px;text-align:center;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Cant.</th>
+        <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Precio</th>
+        <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>${itemsHTML}</tbody>
+  </table>
+
+  <!-- TOTALES -->
+  <div style="margin-top:0;border-top:2px solid #1e1c18;padding-top:12px">
+    ${(() => { const e = lineaEnvioComprobante(v); return e ? `
+    <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#4a4640">
+      <span>${e.etiqueta}</span>${e.gratis ? '<span style="color:#5a7a5c;font-weight:600">GRATIS</span>' : `<span>${fmt2(e.monto)}</span>`}
+    </div>` : ''; })()}
+    ${v.descuento > 0 ? `
+    <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#9b3a3a">
+      <span>Descuento</span><span>-${fmt2(v.descuento)}</span>
+    </div>` : ''}
+    <div style="display:flex;justify-content:space-between;padding:10px 12px;font-size:16px;font-weight:700;background:#f5f2ed;border-radius:4px;margin-top:4px">
+      <span>Total Pagado</span>
+      <span style="font-family:'Georgia',serif;font-size:20px">${fmt2(v.total_pagado)}</span>
+    </div>
+  </div>
+
+  <!-- CASHBACK SECTION -->
+  ${cashbackSection}
+
+  <!-- FOOTER -->
+  <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e8e4dc;text-align:center;font-size:11px;color:#8a847a;line-height:1.8">
+    Gracias por tu compra 🌿 · Frescura Natural Cosméticos · Hecho con amor en Colombia<br>
+    <span style="font-size:10px">Este documento es un comprobante de venta · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
   </div>
 </div>
 
-<!-- CASHBACK SECTION -->
-${cashbackSection}
-
-<!-- FOOTER -->
-<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e8e4dc;text-align:center;font-size:11px;color:#8a847a;line-height:1.8">
-  Gracias por tu compra 🌿 · Frescura Natural Cosméticos · Hecho con amor en Colombia<br>
-  <span style="font-size:10px">Este documento es un comprobante de venta · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
-</div>
+<div id="wa-toast" class="toast-banner no-print"></div>
 
 <!-- ACTION BUTTONS -->
-<div class="no-print" style="margin-top:24px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-  <button onclick="if(window.opener && window.opener.enviarComprobanteWhatsApp){window.opener.enviarComprobanteWhatsApp('${v.id}')}else{alert('Envío directo disponible desde la tabla de ventas.')}" style="background:#25D366;color:#fff;border:none;padding:12px 24px;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:600;cursor:pointer">📲 Enviar por WhatsApp</button>
-  <button onclick="window.print()" style="background:#5a7a5c;color:#fff;border:none;padding:12px 28px;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>
-  <button onclick="window.close()" style="background:#f5f2ed;color:#4a4640;border:1px solid #ddd8cf;padding:12px 20px;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;cursor:pointer">Cerrar</button>
+<div class="actions-bar no-print">
+  <button id="btn-wa" class="btn-action btn-wa" onclick="compartirWhatsApp()">📲 Enviar por WhatsApp</button>
+  <button class="btn-action btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+  <button class="btn-action btn-close" onclick="window.close()">Cerrar</button>
 </div>
-
-
 
 </body>
 </html>`;
 
   const w = window.open('', '_blank', 'width=700,height=900');
+  if (!w) {
+    if (confirm('No se pudo abrir la ventana del comprobante (ventanas emergentes bloqueadas). ¿Deseas abrir WhatsApp directamente con el texto del comprobante?')) {
+      enviarComprobanteWhatsApp(id);
+    }
+    return;
+  }
   w.document.write(html);
   w.document.close();
+
+  w.compartirWhatsApp = async function() {
+    const btn = w.document.getElementById('btn-wa');
+    const toast = w.document.getElementById('wa-toast');
+    const originalText = btn ? btn.innerHTML : '📲 Enviar por WhatsApp';
+    if (btn) {
+      btn.innerHTML = '⏳ Preparando comprobante...';
+      btn.disabled = true;
+    }
+
+    const fileName = `Comprobante-${v.id}.png`;
+
+    try {
+      const card = w.document.getElementById('comprobante-card');
+      let blob = null;
+
+      const h2c = window.html2canvas || (w && w.html2canvas);
+      if (h2c && card) {
+        try {
+          const canvas = await h2c(card, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false
+          });
+          blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        } catch (errCanvas) {
+          console.warn('Error al capturar comprobante con html2canvas:', errCanvas);
+        }
+      }
+
+      // 1. Caso Móvil / PWA: Web Share API con archivo adjunto
+      if (blob && (w.navigator.canShare || navigator.canShare)) {
+        const nav = w.navigator.canShare ? w.navigator : navigator;
+        const file = new File([blob], fileName, { type: 'image/png' });
+        if (nav.canShare({ files: [file] })) {
+          await nav.share({
+            files: [file],
+            title: `Comprobante ${v.id}`,
+            text: textoWA
+          });
+          if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+          return;
+        }
+      }
+
+      // 2. Caso Desktop: Copiar imagen al portapapeles + Descarga + Abrir WhatsApp Web
+      let copiado = false;
+      const clipNav = (w.navigator.clipboard && w.ClipboardItem) ? w.navigator : ((navigator.clipboard && window.ClipboardItem) ? navigator : null);
+      if (blob && clipNav) {
+        try {
+          const ItemClass = w.ClipboardItem || window.ClipboardItem;
+          await clipNav.clipboard.write([
+            new ItemClass({ 'image/png': blob })
+          ]);
+          copiado = true;
+        } catch (errClip) {
+          console.warn('Portapapeles no disponible:', errClip);
+        }
+      }
+
+      if (blob) {
+        try {
+          const a = w.document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = fileName;
+          w.document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            try { w.document.body.removeChild(a); } catch(_) {}
+            URL.revokeObjectURL(a.href);
+          }, 2000);
+        } catch (errDl) {
+          console.warn('Descarga no disponible:', errDl);
+        }
+      }
+
+      if (toast) {
+        toast.style.display = 'block';
+        toast.innerHTML = copiado 
+          ? '📋 <strong>¡Comprobante copiado al portapapeles y descargado!</strong><br>En la ventana de WhatsApp Web que se abrirá, presiona <strong>Ctrl + V</strong> para pegar la imagen.'
+          : '📥 <strong>Comprobante descargado en tu equipo.</strong><br>En WhatsApp Web puedes adjuntar la imagen descargada en el chat.';
+      }
+
+      setTimeout(() => {
+        w.open(urlWA, '_blank') || window.open(urlWA, '_blank');
+        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+      }, 900);
+
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+        return;
+      }
+      console.error('Error al compartir WhatsApp:', err);
+      w.open(urlWA, '_blank') || window.open(urlWA, '_blank');
+      if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+    }
+  };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2678,7 +2825,10 @@ function saveVenta(){
   if(cid){const c=getCliente(cid);if(c)c.total_historico=(c.total_historico||0)+venta.total_pagado;}
   DB.ventas.push(venta);DB.detalle_ventas.push(...items);
   sincronizarGastoTransporte(venta);
-  saveDB();closeModal('modal-venta');
+  saveDB();
+  syncVentaToFirestore(venta, items).catch(e=>console.warn('[syncVenta]',e.message));
+  items.forEach(d=>{const p=getProducto(d.id_producto);if(p)syncProductoToFirestore(p).catch(()=>{});});
+  closeModal('modal-venta');
   const activePage=document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1]||'dashboard';
   renderPage(activePage);
 }
