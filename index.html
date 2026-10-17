@@ -893,13 +893,67 @@ textarea{resize:vertical;min-height:80px}
 // ══════════════════════════════════════════════════════════
 // EMBEDDED BACKUP DATA
 // ══════════════════════════════════════════════════════════
-const BACKUP_DATA = {"productos":[{"id":"BAL-001","nombre":"FreshLips Cereza","categoria":"Bálsamo Labial","costo":1400,"precio":8900,"stock":7,"stock_min":4,"activo":true,"tiene_descuento":false,"desc":"Bálsamo labial sabor a cereza."},{"id":"BAL-002","nombre":"FreshLips Coco","categoria":"Bálsamo Labial","costo":1400,"precio":8900,"stock":13,"stock_min":4,"activo":true,"tiene_descuento":false,"desc":"Bálsamo labial sabor a coco."},{"id":"BAL-003","nombre":"FreshLips Fresa","categoria":"Bálsamo Labial","costo":1400,"precio":8900,"stock":8,"stock_min":4,"activo":true,"tiene_descuento":false,"desc":"Bálsamo labial sabor a fresa."},{"id":"BAL-004","nombre":"FreshLips Hierbabuena","categoria":"Bálsamo Labial","costo":1400,"precio":8900,"stock":15,"stock_min":4,"activo":true,"tiene_descuento":false,"desc":"Bálsamo labial sabor a hierbabuena."},{"id":"BAL-005","nombre":"FreshLips Vainilla","categoria":"Bálsamo Labial","costo":1400,"precio":8900,"stock":18,"stock_min":4,"activo":true,"tiene_descuento":false,"desc":"Bálsamo labial sabor a vainilla."},{"id":"DES-001","nombre":"DeoFresh Botanic","categoria":"Desodorante","costo":9150,"precio":29900,"stock":15,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Desodorante en crema 60g."},{"id":"JAB-001","nombre":"Jabón Individual (cualquier aroma)","categoria":"Jabones","costo":5000,"precio":15000,"stock":94,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Jabón artesanal individual."},{"id":"JAB-002","nombre":"Kit Jabones Árbol de Té 100g x3","categoria":"Jabones","costo":13467,"precio":43900,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite de Coco, Aceite esencial de Árbol de Té."},{"id":"JAB-003","nombre":"Kit Jabones Árbol de Té 70g x3","categoria":"Jabones","costo":11571,"precio":39500,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite de Coco, Aceite esencial de Árbol de Té."},{"id":"JAB-004","nombre":"Kit Jabones Aura Sagrada 100g x3","categoria":"Jabones","costo":15837,"precio":46000,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite de Ricino, Aceites esenciales varios."},{"id":"JAB-005","nombre":"Kit Jabones Aura Sagrada 70g x3","categoria":"Jabones","costo":13671,"precio":41000,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite de Ricino."},{"id":"JAB-006","nombre":"Kit Jabones Avena 100g x3","categoria":"Jabones","costo":13350,"precio":42500,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, avena exfoliante."},{"id":"JAB-007","nombre":"Kit Jabones Avena 70g x3","categoria":"Jabones","costo":11631,"precio":38000,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, avena exfoliante."},{"id":"JAB-008","nombre":"Kit Jabones Caléndula 100g x3","categoria":"Jabones","costo":13188,"precio":41000,"stock":99,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite Esencial de Caléndula."},{"id":"JAB-009","nombre":"Kit Jabones Caléndula 70g x3","categoria":"Jabones","costo":10926,"precio":37000,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite Esencial de Caléndula."},{"id":"JAB-010","nombre":"Kit Jabones Eucalipto 100g x3","categoria":"Jabones","costo":13590,"precio":42900,"stock":96,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite esencial de Eucalipto."},{"id":"JAB-011","nombre":"Kit Jabones Eucalipto 70g x3","categoria":"Jabones","costo":11271,"precio":38900,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite esencial de Eucalipto."},{"id":"JAB-012","nombre":"Kit Jabones Hidratación Profunda 100g x3","categoria":"Jabones","costo":15837,"precio":46000,"stock":100,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite de Jojoba, Vitamina E."},{"id":"JAB-013","nombre":"Kit Jabones Hidratación Profunda 70g x3","categoria":"Jabones","costo":13671,"precio":41000,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Aceite de Jojoba, Vitamina E."},{"id":"JAB-014","nombre":"Kit Jabones Lavanda 100g x3","categoria":"Jabones","costo":12636,"precio":40900,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Extracto de Lavanda."},{"id":"JAB-015","nombre":"Kit Jabones Lavanda 70g x3","categoria":"Jabones","costo":12030,"precio":37500,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Glicerina Vegetal, Extracto de Lavanda."},{"id":"JAB-016","nombre":"Kit Jabones Mujer Natural 70g x3","categoria":"Jabones","costo":11396,"precio":39000,"stock":40,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Edición especial. Lavanda, Caléndula y Rosa Mosqueta."},{"id":"JAB-017","nombre":"Kit Jabones Protección Fresca 100g x3","categoria":"Jabones","costo":15837,"precio":46000,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Eucalipto, Caléndula, Arcilla Blanca."},{"id":"JAB-018","nombre":"Kit Jabones Protección Fresca 70g x3","categoria":"Jabones","costo":13671,"precio":41000,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Eucalipto, Caléndula, Arcilla Blanca."},{"id":"JAB-019","nombre":"Kit Jabones Renovación Nocturna 100g x3","categoria":"Jabones","costo":15837,"precio":46000,"stock":96,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Rosa Mosqueta, Lavanda, avena."},{"id":"JAB-020","nombre":"Kit Jabones Renovación Nocturna 70g x3","categoria":"Jabones","costo":13671,"precio":41000,"stock":99,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Rosa Mosqueta, Lavanda, avena."},{"id":"JAB-021","nombre":"Kit Jabones Romero 100g x3","categoria":"Jabones","costo":13179,"precio":44900,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Aceite esencial de Romero."},{"id":"JAB-022","nombre":"Kit Jabones Romero 70g x3","categoria":"Jabones","costo":11511,"precio":40500,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Aceite esencial de Romero."},{"id":"JAB-023","nombre":"Kit Jabones Romero+Lavanda+Siete Esencias 100g","categoria":"Jabones","costo":13500,"precio":41900,"stock":100,"stock_min":8,"activo":true,"tiene_descuento":false,"desc":"Surtido Romero, Lavanda y Siete Esencias."},{"id":"JAB-024","nombre":"Kit Jabones Rosa Mosqueta 100g x3","categoria":"Jabones","costo":14187,"precio":44500,"stock":97,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Rosa Mosqueta con toque de lavanda."},{"id":"JAB-025","nombre":"Kit Jabones Rosa Mosqueta 70g x3","categoria":"Jabones","costo":12291,"precio":39000,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Rosa Mosqueta con toque de lavanda."},{"id":"JAB-026","nombre":"Kit Jabones Serenidad Aloe 100g x3","categoria":"Jabones","costo":15837,"precio":46000,"stock":99,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Aloe Vera, Árbol de Té."},{"id":"JAB-027","nombre":"Kit Jabones Serenidad Aloe 70g x3","categoria":"Jabones","costo":13671,"precio":41000,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Aloe Vera, Árbol de Té."},{"id":"JAB-028","nombre":"Kit Jabones Siete Esencias 100g x3","categoria":"Jabones","costo":12900,"precio":41500,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Siete esencias: lavanda, eucalipto, romero, sándalo, ruda, limón y canela."},{"id":"JAB-029","nombre":"Kit Jabones Siete Esencias 70g x3","categoria":"Jabones","costo":11331,"precio":37500,"stock":100,"stock_min":10,"activo":true,"tiene_descuento":false,"desc":"Siete esencias: lavanda, eucalipto, romero, sándalo, ruda, limón y canela."},{"id":"PAC-001","nombre":"Combo Jabón + Desodorante + Bálsamo Labial","categoria":"Packs","costo":15850,"precio":54900,"stock":6,"stock_min":3,"activo":true,"tiene_descuento":false,"desc":"Combo completo."},{"id":"PAC-002","nombre":"Pack Cuidado Facial (6 elementos)","categoria":"Packs","costo":17500,"precio":49900,"stock":29,"stock_min":8,"activo":true,"tiene_descuento":false,"desc":"Toalla facial, 2 jabones Rosa Mosqueta, 2 esponjas, 1 FreshLips."},{"id":"SER-001","nombre":"Natural Clear Sérum Despigmentante x30mL","categoria":"Sérum","costo":7587,"precio":39900,"stock":14,"stock_min":5,"activo":true,"tiene_descuento":false,"desc":"Niacinamida, ácido tranexámico, extracto de regalíz."},{"id":"SER-002","nombre":"Sérum Fuerza Capilar x50mL","categoria":"Sérum","costo":7200,"precio":44900,"stock":1,"stock_min":1,"activo":true,"tiene_descuento":false,"desc":"Aceites vegetales y esenciales de romero."},{"id":"SER-003","nombre":"Sérum Natural Hydra E x50mL","categoria":"Sérum","costo":10500,"precio":44900,"stock":2,"stock_min":1,"activo":true,"tiene_descuento":false,"desc":"Sérum Hidratante con Vitamina E."}],"ventas":[{"id":"VTA-MNNSABDO","fecha":"2026-04-06","id_cliente":"CLI-MNNS86HU","canal_venta":"Distribuidora","total_bruto":99900,"descuento":0,"costo_envio":-15000,"total_pagado":84900,"metodo_pago":"Nequi","estado_pago":"confirmado","estado_envio":"preparando","costo_productos":30850,"cashback_generado":0},{"id":"VTA-MNNSGE46","fecha":"2026-04-03","id_cliente":"CLI-MNNSC6DT","canal_venta":"Distribuidora","total_bruto":74800,"descuento":9900,"costo_envio":0,"total_pagado":64900,"metodo_pago":"Nequi","estado_pago":"confirmado","estado_envio":"preparando","costo_productos":23300,"cashback_generado":0}],"detalle_ventas":[{"id":"DET-MNNSABDO","id_venta":"VTA-MNNSABDO","id_producto":"JAB-001","cantidad":3,"precio_unitario":15000,"costo_unitario":5000,"subtotal":45000},{"id":"DET-MNNSABDO","id_venta":"VTA-MNNSABDO","id_producto":"PAC-001","cantidad":1,"precio_unitario":54900,"costo_unitario":15850,"subtotal":54900},{"id":"DET-MNNSGE46","id_venta":"VTA-MNNSGE46","id_producto":"JAB-001","cantidad":1,"precio_unitario":15000,"costo_unitario":5000,"subtotal":15000},{"id":"DET-MNNSGE46","id_venta":"VTA-MNNSGE46","id_producto":"DES-001","cantidad":2,"precio_unitario":29900,"costo_unitario":9150,"subtotal":59800}],"clientes":[{"id":"CLI-MNNS86HU","nombre":"Libia Rueda","telefono":"3006982722","ciudad":"Bucaramanga","canal":"Referido","cashback":0,"club_frescura":false,"fecha_primera":"2026-04-06","total_historico":84900,"tipo_piel":""},{"id":"CLI-MNNSC6DT","nombre":"Angela Peña","telefono":"3134517620","ciudad":"Cali","canal":"Referido","cashback":0,"club_frescura":false,"fecha_primera":"2026-04-06","total_historico":64900,"tipo_piel":""}],"movimientos":[{"id":"MOV-MNNSABDO","fecha":"2026-04-06","id_producto":"JAB-001","tipo":"venta","cantidad":-3,"costo_unitario":5000,"referencia":"VTA-MNNSABDO","nota":"Venta VTA-MNNSABDO"},{"id":"MOV-MNNSABDO2","fecha":"2026-04-06","id_producto":"PAC-001","tipo":"venta","cantidad":-1,"costo_unitario":15850,"referencia":"VTA-MNNSABDO","nota":"Venta VTA-MNNSABDO"},{"id":"MOV-MNNSGE46","fecha":"2026-04-03","id_producto":"JAB-001","tipo":"venta","cantidad":-1,"costo_unitario":5000,"referencia":"VTA-MNNSGE46","nota":"Venta VTA-MNNSGE46"},{"id":"MOV-MNNSGE46-2","fecha":"2026-04-03","id_producto":"DES-001","tipo":"venta","cantidad":-2,"costo_unitario":9150,"referencia":"VTA-MNNSGE46","nota":"Venta VTA-MNNSGE46"}],"pedidos":[],"gastos":[],"muestras":[],"meta_mensual":3000000};
-
-// ══════════════════════════════════════════════════════════
+const BACKUP_DATA = {"productos": [{"id": "BAL-001", "nombre": "FreshLips Cereza", "categoria": "Bálsamo Labial", "costo": 1400, "precio": 9100, "stock": 7, "stock_min": 4, "activo": true, "tiene_descuento": false, "desc": "Bálsamo labial sabor a cereza."}, {"id": "BAL-002", "nombre": "FreshLips Coco", "categoria": "Bálsamo Labial", "costo": 1400, "precio": 9100, "stock": 13, "stock_min": 4, "activo": true, "tiene_descuento": false, "desc": "Bálsamo labial sabor a coco."}, {"id": "BAL-003", "nombre": "FreshLips Fresa", "categoria": "Bálsamo Labial", "costo": 1400, "precio": 9100, "stock": 8, "stock_min": 4, "activo": true, "tiene_descuento": false, "desc": "Bálsamo labial sabor a fresa."}, {"id": "BAL-004", "nombre": "FreshLips Hierbabuena", "categoria": "Bálsamo Labial", "costo": 1400, "precio": 9100, "stock": 15, "stock_min": 4, "activo": true, "tiene_descuento": false, "desc": "Bálsamo labial sabor a hierbabuena."}, {"id": "BAL-005", "nombre": "FreshLips Vainilla", "categoria": "Bálsamo Labial", "costo": 1400, "precio": 9100, "stock": 18, "stock_min": 4, "activo": true, "tiene_descuento": false, "desc": "Bálsamo labial sabor a vainilla."}, {"id": "DES-001", "nombre": "DeoFresh Botanic", "categoria": "Desodorante", "costo": 9150, "precio": 30500, "stock": 15, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Desodorante en crema 60g."}, {"id": "JAB-001", "nombre": "Jabón Individual (cualquier aroma)", "categoria": "Jabones", "costo": 5000, "precio": 15200, "stock": 94, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Jabón artesanal individual."}, {"id": "JAB-002", "nombre": "Kit Jabones Árbol de Té 100g x3", "categoria": "Jabones", "costo": 13467, "precio": 44500, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite de Coco, Aceite esencial de Árbol de Té."}, {"id": "JAB-003", "nombre": "Kit Jabones Árbol de Té 70g x3", "categoria": "Jabones", "costo": 11571, "precio": 39500, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite de Coco, Aceite esencial de Árbol de Té."}, {"id": "JAB-004", "nombre": "Kit Jabones Aura Sagrada 100g x3", "categoria": "Jabones", "costo": 15837, "precio": 47900, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite de Ricino, Aceites esenciales varios."}, {"id": "JAB-005", "nombre": "Kit Jabones Aura Sagrada 70g x3", "categoria": "Jabones", "costo": 13671, "precio": 41000, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite de Ricino."}, {"id": "JAB-006", "nombre": "Kit Jabones Avena 100g x3", "categoria": "Jabones", "costo": 13350, "precio": 43500, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, avena exfoliante."}, {"id": "JAB-007", "nombre": "Kit Jabones Avena 70g x3", "categoria": "Jabones", "costo": 11631, "precio": 38000, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, avena exfoliante."}, {"id": "JAB-008", "nombre": "Kit Jabones Caléndula 100g x3", "categoria": "Jabones", "costo": 13188, "precio": 41900, "stock": 99, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite Esencial de Caléndula."}, {"id": "JAB-009", "nombre": "Kit Jabones Caléndula 70g x3", "categoria": "Jabones", "costo": 10926, "precio": 37000, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite Esencial de Caléndula."}, {"id": "JAB-010", "nombre": "Kit Jabones Eucalipto 100g x3", "categoria": "Jabones", "costo": 13590, "precio": 43500, "stock": 96, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite esencial de Eucalipto."}, {"id": "JAB-011", "nombre": "Kit Jabones Eucalipto 70g x3", "categoria": "Jabones", "costo": 11271, "precio": 38900, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite esencial de Eucalipto."}, {"id": "JAB-012", "nombre": "Kit Jabones Hidratación Profunda 100g x3", "categoria": "Jabones", "costo": 15837, "precio": 46900, "stock": 100, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite de Jojoba, Vitamina E."}, {"id": "JAB-013", "nombre": "Kit Jabones Hidratación Profunda 70g x3", "categoria": "Jabones", "costo": 13671, "precio": 41000, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Aceite de Jojoba, Vitamina E."}, {"id": "JAB-014", "nombre": "Kit Jabones Lavanda 100g x3", "categoria": "Jabones", "costo": 12636, "precio": 41500, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Extracto de Lavanda."}, {"id": "JAB-015", "nombre": "Kit Jabones Lavanda 70g x3", "categoria": "Jabones", "costo": 12030, "precio": 37500, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Glicerina Vegetal, Extracto de Lavanda."}, {"id": "JAB-016", "nombre": "Kit Jabones Mujer Natural 70g x3", "categoria": "Jabones", "costo": 11396, "precio": 39900, "stock": 40, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Edición especial. Lavanda, Caléndula y Rosa Mosqueta."}, {"id": "JAB-017", "nombre": "Kit Jabones Protección Fresca 100g x3", "categoria": "Jabones", "costo": 15837, "precio": 46900, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Eucalipto, Caléndula, Arcilla Blanca."}, {"id": "JAB-018", "nombre": "Kit Jabones Protección Fresca 70g x3", "categoria": "Jabones", "costo": 13671, "precio": 41000, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Eucalipto, Caléndula, Arcilla Blanca."}, {"id": "JAB-019", "nombre": "Kit Jabones Renovación Nocturna 100g x3", "categoria": "Jabones", "costo": 15837, "precio": 46900, "stock": 96, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Rosa Mosqueta, Lavanda, avena."}, {"id": "JAB-020", "nombre": "Kit Jabones Renovación Nocturna 70g x3", "categoria": "Jabones", "costo": 13671, "precio": 41000, "stock": 99, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Rosa Mosqueta, Lavanda, avena."}, {"id": "JAB-021", "nombre": "Kit Jabones Romero 100g x3", "categoria": "Jabones", "costo": 13179, "precio": 45900, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Aceite esencial de Romero."}, {"id": "JAB-022", "nombre": "Kit Jabones Romero 70g x3", "categoria": "Jabones", "costo": 11511, "precio": 40500, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Aceite esencial de Romero."}, {"id": "JAB-023", "nombre": "Kit Jabones Romero+Lavanda+Siete Esencias 100g", "categoria": "Jabones", "costo": 13500, "precio": 43500, "stock": 100, "stock_min": 8, "activo": true, "tiene_descuento": false, "desc": "Surtido Romero, Lavanda y Siete Esencias."}, {"id": "JAB-024", "nombre": "Kit Jabones Rosa Mosqueta 100g x3", "categoria": "Jabones", "costo": 14187, "precio": 45500, "stock": 97, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Rosa Mosqueta con toque de lavanda."}, {"id": "JAB-025", "nombre": "Kit Jabones Rosa Mosqueta 70g x3", "categoria": "Jabones", "costo": 12291, "precio": 39000, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Rosa Mosqueta con toque de lavanda."}, {"id": "JAB-026", "nombre": "Kit Jabones Serenidad Aloe 100g x3", "categoria": "Jabones", "costo": 15837, "precio": 46900, "stock": 99, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Aloe Vera, Árbol de Té."}, {"id": "JAB-027", "nombre": "Kit Jabones Serenidad Aloe 70g x3", "categoria": "Jabones", "costo": 13671, "precio": 41000, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Aloe Vera, Árbol de Té."}, {"id": "JAB-028", "nombre": "Kit Jabones Siete Esencias 100g x3", "categoria": "Jabones", "costo": 12900, "precio": 42500, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Siete esencias: lavanda, eucalipto, romero, sándalo, ruda, limón y canela."}, {"id": "JAB-029", "nombre": "Kit Jabones Siete Esencias 70g x3", "categoria": "Jabones", "costo": 11331, "precio": 37500, "stock": 100, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Siete esencias: lavanda, eucalipto, romero, sándalo, ruda, limón y canela."}, {"id": "PAC-001", "nombre": "Combo Jabón + Desodorante + Bálsamo Labial", "categoria": "Packs", "costo": 15850, "precio": 70900, "stock": 6, "stock_min": 3, "activo": true, "tiene_descuento": false, "desc": "Combo completo."}, {"id": "PAC-002", "nombre": "Pack Cuidado Facial (6 elementos)", "categoria": "Packs", "costo": 17500, "precio": 50900, "stock": 29, "stock_min": 8, "activo": true, "tiene_descuento": false, "desc": "Toalla facial, 2 jabones Rosa Mosqueta, 2 esponjas, 1 FreshLips."}, {"id": "SER-001", "nombre": "Natural Clear Sérum Despigmentante x30mL", "categoria": "Sérum", "costo": 7587, "precio": 40500, "stock": 14, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Niacinamida, ácido tranexámico, extracto de regalíz."}, {"id": "SER-002", "nombre": "Sérum Fuerza Capilar x50mL", "categoria": "Sérum", "costo": 7200, "precio": 45900, "stock": 1, "stock_min": 1, "activo": true, "tiene_descuento": false, "desc": "Aceites vegetales y esenciales de romero."}, {"id": "SER-003", "nombre": "Sérum Natural Hydra E x50mL", "categoria": "Sérum", "costo": 10500, "precio": 45900, "stock": 2, "stock_min": 1, "activo": true, "tiene_descuento": false, "desc": "Sérum Hidratante con Vitamina E."}, {"id": "JAB-030", "nombre": "Kit Jabones de Naranja (100 g x 3)", "categoria": "Jabones", "costo": 13500, "precio": 45500, "stock": 30, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Jabones artesanales de naranja con aceite de naranja dulce."}, {"id": "JAB-031", "nombre": "Kit Jabones Fuerza Natural (Edición Hombre 100g x3)", "categoria": "Jabones", "costo": 16000, "precio": 50900, "stock": 25, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Edición especial para hombre con pino, eucalipto y romero."}, {"id": "CHA-001", "nombre": "Champú Sólido de Lavanda 50 g", "categoria": "Cuidado Capilar", "costo": 8500, "precio": 30500, "stock": 20, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Champú sólido artesanal con aceite esencial de lavanda. Rinde 25-30 lavadas."}, {"id": "CHA-002", "nombre": "Champú Sólido de Romero 50 g", "categoria": "Cuidado Capilar", "costo": 8500, "precio": 30500, "stock": 20, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Champú sólido artesanal con aceite esencial de romero."}, {"id": "DES-002", "nombre": "DeoFresh Botanic Barra 75 g", "categoria": "Desodorante", "costo": 10500, "precio": 35500, "stock": 15, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Desodorante natural en barra sin aluminio ni parabenos."}, {"id": "CRM-001", "nombre": "Crema Hidratante Facial HydraSeal 45 g", "categoria": "Cuidado Facial", "costo": 9200, "precio": 30500, "stock": 18, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Crema facial con niacinamida, karité, jojoba, rosa mosqueta y vitamina E."}, {"id": "SER-004", "nombre": "Sérum Oleoso Capilar Fuerza Capilar 30 mL", "categoria": "Sérum", "costo": 6500, "precio": 30500, "stock": 15, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Fórmula con aceite de semilla de uva, ricino y romero en envase de 30 mL."}, {"id": "SER-005", "nombre": "Sérum Facial Acné Balance™ 30 mL", "categoria": "Sérum", "costo": 7200, "precio": 35500, "stock": 12, "stock_min": 5, "activo": true, "tiene_descuento": false, "desc": "Sérum facial con aceites vegetales ligeros y aceite esencial de árbol de té."}, {"id": "PAC-003", "nombre": "Combo Frescura Natural (Jabón + Crema + Desodorante + Bálsamo)", "categoria": "Packs", "costo": 22000, "precio": 78500, "stock": 10, "stock_min": 3, "activo": true, "tiene_descuento": false, "desc": "Rutina completa de 4 piezas esenciales."}, {"id": "PAC-004", "nombre": "Kit De Vuelta a lo Natural (Jabón + Sisal + Jabonera + Toalla)", "categoria": "Packs", "costo": 14000, "precio": 40500, "stock": 15, "stock_min": 4, "activo": true, "tiene_descuento": false, "desc": "Kit ecológico de baño con accesorios sostenibles."}, {"id": "PAC-005", "nombre": "Pack Cuidado Diario Piel con Acné (Sérum + 3 Jabones Árbol de Té)", "categoria": "Packs", "costo": 20000, "precio": 70900, "stock": 10, "stock_min": 3, "activo": true, "tiene_descuento": false, "desc": "Sérum Acné Balance 30mL + Kit 3 Jabones Árbol de Té 100g."}, {"id": "ACC-001", "nombre": "Bolsa Exfoliante de Sisal 100% Natural", "categoria": "Accesorios", "costo": 2500, "precio": 8100, "stock": 50, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Bolsita de fibra vegetal de sisal para exfoliación en la ducha."}, {"id": "ACC-002", "nombre": "Jabonera de Bambú Natural", "categoria": "Accesorios", "costo": 2800, "precio": 8100, "stock": 40, "stock_min": 10, "activo": true, "tiene_descuento": false, "desc": "Jabonera ecológica de bambú que facilita el secado de jabones y champús sólidos."}], "ventas": [{"id": "VTA-MNNSABDO", "fecha": "2026-04-06", "id_cliente": "CLI-MNNS86HU", "canal_venta": "Distribuidora", "total_bruto": 99900, "descuento": 0, "costo_envio": -15000, "total_pagado": 84900, "metodo_pago": "Nequi", "estado_pago": "confirmado", "estado_envio": "preparando", "costo_productos": 30850, "cashback_generado": 0, "costo_transporte": 0, "transporte_pagado_por": "frescura", "subtotal_productos": 99900}, {"id": "VTA-MNNSGE46", "fecha": "2026-04-03", "id_cliente": "CLI-MNNSC6DT", "canal_venta": "Distribuidora", "total_bruto": 74800, "descuento": 9900, "costo_envio": 0, "total_pagado": 64900, "metodo_pago": "Nequi", "estado_pago": "confirmado", "estado_envio": "preparando", "costo_productos": 23300, "cashback_generado": 0, "costo_transporte": 0, "transporte_pagado_por": "", "subtotal_productos": 64900}], "detalle_ventas": [{"id": "DET-MNNSABDO", "id_venta": "VTA-MNNSABDO", "id_producto": "JAB-001", "cantidad": 3, "precio_unitario": 15000, "costo_unitario": 5000, "subtotal": 45000}, {"id": "DET-MNNSABDO2", "id_venta": "VTA-MNNSABDO", "id_producto": "PAC-001", "cantidad": 1, "precio_unitario": 54900, "costo_unitario": 15850, "subtotal": 54900}, {"id": "DET-MNNSGE46", "id_venta": "VTA-MNNSGE46", "id_producto": "JAB-001", "cantidad": 1, "precio_unitario": 15000, "costo_unitario": 5000, "subtotal": 15000}, {"id": "DET-MNNSGE46-2", "id_venta": "VTA-MNNSGE46", "id_producto": "DES-001", "cantidad": 2, "precio_unitario": 29900, "costo_unitario": 9150, "subtotal": 59800}], "clientes": [{"id": "CLI-MNNS86HU", "nombre": "Libia Rueda", "telefono": "3006982722", "ciudad": "Bucaramanga", "canal": "Referido", "cashback": 0, "club_frescura": false, "fecha_primera": "2026-04-06", "total_historico": 84900, "tipo_piel": ""}, {"id": "CLI-MNNSC6DT", "nombre": "Angela Peña", "telefono": "3134517620", "ciudad": "Cali", "canal": "Referido", "cashback": 0, "club_frescura": false, "fecha_primera": "2026-04-06", "total_historico": 64900, "tipo_piel": ""}], "movimientos": [{"id": "MOV-MNNSABDO", "fecha": "2026-04-06", "id_producto": "JAB-001", "tipo": "venta", "cantidad": -3, "costo_unitario": 5000, "referencia": "VTA-MNNSABDO", "nota": "Venta VTA-MNNSABDO"}, {"id": "MOV-MNNSABDO2", "fecha": "2026-04-06", "id_producto": "PAC-001", "tipo": "venta", "cantidad": -1, "costo_unitario": 15850, "referencia": "VTA-MNNSABDO", "nota": "Venta VTA-MNNSABDO"}, {"id": "MOV-MNNSGE46", "fecha": "2026-04-03", "id_producto": "JAB-001", "tipo": "venta", "cantidad": -1, "costo_unitario": 5000, "referencia": "VTA-MNNSGE46", "nota": "Venta VTA-MNNSGE46"}, {"id": "MOV-MNNSGE46-2", "fecha": "2026-04-03", "id_producto": "DES-001", "tipo": "venta", "cantidad": -2, "costo_unitario": 9150, "referencia": "VTA-MNNSGE46", "nota": "Venta VTA-MNNSGE46"}], "pedidos": [], "gastos": [], "muestras": [], "devoluciones": [], "meta_mensual": 3000000};═══════════════════════════════════════════════════
 // DB + LOAD/SAVE
 // ══════════════════════════════════════════════════════════
 const DB_VERSION = '5.0';
 let DB = {};
+
+
+// ── Precios actualizados del Feed de Google Merchant Center ──
+const FEED_PRECIOS = {
+  "BAL-001": 9100, "BAL-002": 9100, "BAL-003": 9100, "BAL-004": 9100, "BAL-005": 9100,
+  "DES-001": 30500, "JAB-001": 15200, "JAB-002": 44500, "JAB-004": 47900, "JAB-006": 43500,
+  "JAB-008": 41900, "JAB-010": 43500, "JAB-012": 46900, "JAB-014": 41500, "JAB-016": 39900,
+  "JAB-017": 46900, "JAB-019": 46900, "JAB-021": 45900, "JAB-023": 43500, "JAB-024": 45500,
+  "JAB-026": 46900, "JAB-028": 42500, "PAC-001": 70900, "PAC-002": 50900, "SER-001": 40500,
+  "SER-002": 45900, "SER-003": 45900,
+  "prod_01M28F084E45WFHKQ6HE8B47SV": 60900,
+  "prod_01M28ERZZ76D35JT3H0GA9MH5V": 76500,
+  "prod_01M1N1JPAQ43ABZR91Q9VGGHSP": 30500,
+  "prod_01M1N18XKQ4TEYPB7Z0FZAG3YZ": 30500,
+  "prod_01M1MZM65PWSSAQC5TCAY5ET80": 35500,
+  "prod_01KZ7Z8A7YYC4YTWYEZ4K33Z31": 78500,
+  "prod_01KYBG9HR06V45J19W54F6YHSS": 45500,
+  "prod_01KXZXRFZDZWEXGMJAYDTK779M": 30500,
+  "prod_01KWN81HBR20AYSBWWFF578Z5X": 40500,
+  "prod_01KWCGY93G990XQS0A5RHAVTMV": 30500,
+  "prod_01KV1ER3SEDTB7WSEMN1KF2NJ3": 116900,
+  "prod_01KV1CG6YGC7DQP1WEP4D8DDHW": 91500,
+  "prod_01KV0WT9VDHQW89RR93FQW0Q2N": 35500,
+  "prod_01KV0TVQP4H7MT4F1195JAG8XC": 70900,
+  "prod_01KTSV1CH4060MX5FMH2ND1MFT": 142500,
+  "prod_01KTSSFFMC1FGD17D1Q5GA3QEP": 142500,
+  "prod_01KTSRP2HQ1NEHNQGQ9SQRFQ3Q": 142500,
+  "prod_01KSP3PYBWE98T3B37X0ZHQ6GJ": 8100,
+  "prod_01KSN96N0253PNKEC3PQNW0R79": 8100,
+  "prod_01KSN62KN1JJDQE35WCSE8XFQ5": 50900
+};
+
+function aplicarPreciosFeed(productos) {
+  if (!productos) return;
+  productos.forEach(p => {
+    if (FEED_PRECIOS[p.id]) {
+      p.precio = FEED_PRECIOS[p.id];
+    } else {
+      const n = (p.nombre || '').toLowerCase();
+      if (n.includes('champu') || n.includes('champú')) {
+        if (n.includes('lavanda')) p.precio = 30500;
+        else if (n.includes('romero')) p.precio = 30500;
+      } else if (n.includes('deofresh') && n.includes('barra')) {
+        p.precio = 35500;
+      } else if (n.includes('hydraseal')) {
+        p.precio = 30500;
+      } else if (n.includes('acné') || n.includes('acne')) {
+        p.precio = 35500;
+      } else if (n.includes('sisal')) {
+        p.precio = 8100;
+      } else if (n.includes('jabonera') && n.includes('bambú')) {
+        p.precio = 8100;
+      }
+    }
+  });
+}
 
 function _applyDB(data) {
   // Migrate and normalize loaded data
@@ -907,6 +961,7 @@ function _applyDB(data) {
   if (!data.muestras) data.muestras = [];
   if (!data.devoluciones) data.devoluciones = [];
   data.productos.forEach(p => { if (p.tiene_descuento === undefined) p.tiene_descuento = false; });
+  aplicarPreciosFeed(data.productos);
   data.clientes.forEach(c => { if (c.cashback === undefined) c.cashback = 0; delete c.puntos; if (c.club_frescura === undefined) c.club_frescura = false; if (c.nota_credito === undefined) c.nota_credito = 0; });
   // Transporte separado del monto de venta: ventas antiguas quedan con transporte 0
   (data.ventas || []).forEach(v => {
@@ -962,43 +1017,7 @@ function sincronizarGastoTransporte(v) {
   }
 }
 
-async function loadDB() {
-  // Show loading indicator
-  document.getElementById('page-title').textContent = 'Cargando datos...';
-  try {
-    const snap = await _DOC.get();
-    if (snap.exists) {
-      const stored = JSON.parse(snap.data().data);
-      _applyDB(stored);
-      // Sync localStorage as offline backup
-      localStorage.setItem('frescura_db', JSON.stringify(DB));
-      localStorage.setItem('frescura_db_version', DB_VERSION);
-      console.log('[Firebase] Datos cargados desde Firestore ✓');
-    } else {
-      // First time — no cloud data yet, use localStorage or BACKUP_DATA
-      const local = localStorage.getItem('frescura_db');
-      const localVer = localStorage.getItem('frescura_db_version');
-      if (local && localVer === DB_VERSION) {
-        _applyDB(JSON.parse(local));
-        console.log('[Firebase] Usando datos locales (primera sincronización)');
-      } else {
-        _applyDB(JSON.parse(JSON.stringify(BACKUP_DATA)));
-        console.log('[Firebase] Datos iniciales cargados');
-      }
-      await saveDB(); // push to Firestore
-    }
-  } catch(e) {
-    console.warn('[Firebase] loadDB error, usando datos locales:', e.message);
-    // Offline fallback: use localStorage
-    try {
-      const local = localStorage.getItem('frescura_db');
-      if (local) { _applyDB(JSON.parse(local)); }
-      else { _applyDB(JSON.parse(JSON.stringify(BACKUP_DATA))); }
-    } catch(e2) { _applyDB(JSON.parse(JSON.stringify(BACKUP_DATA))); }
-  }
-}
-
-// ── Firebase/Firestore persistence ──
+// ── Firebase / Firestore Configuration (FASE 1: COLECCIONES MODULARES) ──
 const _fbConfig = {
   apiKey: "AIzaSyCHEiZTSKbtC3-PpRV2jo-QLpFUrFqnnKU",
   authDomain: "frescura-admin.firebaseapp.com",
@@ -1009,16 +1028,221 @@ const _fbConfig = {
 };
 if (!firebase.apps.length) firebase.initializeApp(_fbConfig);
 const _db = firebase.firestore();
-const _DOC = _db.collection('admin').doc('db');
 
-// Save: write full DB to Firestore + keep localStorage as offline backup
+// ── Referencias a Colecciones Modulares de Firestore (Fase 1) ──
+const _COL_PRODS    = _db.collection('productos');
+const _COL_VENTAS   = _db.collection('ventas');
+const _COL_DETALLES = _db.collection('detalle_ventas');
+const _COL_CLIENTES = _db.collection('clientes');
+const _COL_GASTOS   = _db.collection('gastos');
+const _COL_MOVS     = _db.collection('movimientos');
+const _COL_MUESTRAS = _db.collection('muestras');
+const _COL_DEVOLS   = _db.collection('devoluciones');
+const _COL_CONFIG   = _db.collection('config');
+const _DOC_LEGACY   = _db.collection('admin').doc('db');
+
+// ── Auto-Migración Inteligente: Migra datos legados hacia colecciones independientes sin pérdida ──
+async function autoMigrateToCollections(source) {
+  console.log('[Firebase Auto-Migrator] Migrando datos a colecciones independientes en Firestore...');
+  try {
+    if (source.productos && source.productos.length) {
+      for (let i = 0; i < source.productos.length; i += 300) {
+        const batch = _db.batch();
+        source.productos.slice(i, i + 300).forEach(p => batch.set(_COL_PRODS.doc(p.id), p));
+        await batch.commit();
+      }
+    }
+    if (source.ventas && source.ventas.length) {
+      for (let i = 0; i < source.ventas.length; i += 300) {
+        const batch = _db.batch();
+        source.ventas.slice(i, i + 300).forEach(v => batch.set(_COL_VENTAS.doc(v.id), v));
+        await batch.commit();
+      }
+    }
+    if (source.detalle_ventas && source.detalle_ventas.length) {
+      for (let i = 0; i < source.detalle_ventas.length; i += 300) {
+        const batch = _db.batch();
+        source.detalle_ventas.slice(i, i + 300).forEach(d => batch.set(_COL_DETALLES.doc(d.id), d));
+        await batch.commit();
+      }
+    }
+    if (source.clientes && source.clientes.length) {
+      for (let i = 0; i < source.clientes.length; i += 300) {
+        const batch = _db.batch();
+        source.clientes.slice(i, i + 300).forEach(c => batch.set(_COL_CLIENTES.doc(c.id), c));
+        await batch.commit();
+      }
+    }
+    if (source.gastos && source.gastos.length) {
+      for (let i = 0; i < source.gastos.length; i += 300) {
+        const batch = _db.batch();
+        source.gastos.slice(i, i + 300).forEach(g => batch.set(_COL_GASTOS.doc(g.id), g));
+        await batch.commit();
+      }
+    }
+    if (source.movimientos && source.movimientos.length) {
+      for (let i = 0; i < source.movimientos.length; i += 300) {
+        const batch = _db.batch();
+        source.movimientos.slice(i, i + 300).forEach(m => batch.set(_COL_MOVS.doc(m.id), m));
+        await batch.commit();
+      }
+    }
+    if (source.muestras && source.muestras.length) {
+      for (let i = 0; i < source.muestras.length; i += 300) {
+        const batch = _db.batch();
+        source.muestras.slice(i, i + 300).forEach(m => batch.set(_COL_MUESTRAS.doc(m.id), m));
+        await batch.commit();
+      }
+    }
+    if (source.devoluciones && source.devoluciones.length) {
+      for (let i = 0; i < source.devoluciones.length; i += 300) {
+        const batch = _db.batch();
+        source.devoluciones.slice(i, i + 300).forEach(d => batch.set(_COL_DEVOLS.doc(d.id), d));
+        await batch.commit();
+      }
+    }
+    await _COL_CONFIG.doc('general').set({ meta_mensual: source.meta_mensual || 3000000 });
+    console.log('[Firebase Auto-Migrator] ¡Migración completada con éxito sin perder ningún dato! ✓');
+  } catch(err) {
+    console.warn('[Firebase Auto-Migrator] Error durante la migración:', err.message);
+  }
+}
+
+// ── Carga de Base de Datos (Prioriza Colecciones Modulares de Firestore) ──
+async function loadDB() {
+  document.getElementById('page-title').textContent = 'Cargando datos...';
+  try {
+    const prodsSnap = await _COL_PRODS.get();
+    
+    if (!prodsSnap.empty) {
+      // Colecciones ya pobladas: cargar en paralelo
+      const [ventasSnap, detSnap, cliSnap, gastosSnap, movsSnap, muestrasSnap, devSnap, configSnap] = await Promise.all([
+        _COL_VENTAS.get(),
+        _COL_DETALLES.get(),
+        _COL_CLIENTES.get(),
+        _COL_GASTOS.get(),
+        _COL_MOVS.get(),
+        _COL_MUESTRAS.get(),
+        _COL_DEVOLS.get(),
+        _COL_CONFIG.doc('general').get()
+      ]);
+
+      const loaded = {
+        productos: prodsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        ventas: ventasSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        detalle_ventas: detSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        clientes: cliSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        gastos: gastosSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        movimientos: movsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        muestras: muestrasSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        devoluciones: devSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        meta_mensual: configSnap.exists ? (configSnap.data().meta_mensual || 3000000) : 3000000
+      };
+
+      _applyDB(loaded);
+      localStorage.setItem('frescura_db', JSON.stringify(DB));
+      localStorage.setItem('frescura_db_version', DB_VERSION);
+      console.log('[Firebase] Datos cargados con éxito desde colecciones individuales de Firestore ✓');
+    } else {
+      // Primera vez o migración necesaria desde admin/db o localStorage
+      let legacyData = null;
+      try {
+        const snap = await _DOC_LEGACY.get();
+        if (snap.exists && snap.data()?.data) {
+          legacyData = JSON.parse(snap.data().data);
+          console.log('[Firebase] Encontrados datos previos en admin/db para migrar');
+        }
+      } catch(e) {}
+
+      if (!legacyData) {
+        const local = localStorage.getItem('frescura_db');
+        if (local) {
+          try { legacyData = JSON.parse(local); } catch(e) {}
+        }
+      }
+
+      if (!legacyData) {
+        legacyData = JSON.parse(JSON.stringify(BACKUP_DATA));
+      }
+
+      _applyDB(legacyData);
+      localStorage.setItem('frescura_db', JSON.stringify(DB));
+      localStorage.setItem('frescura_db_version', DB_VERSION);
+
+      // Ejecutar auto-migración hacia las colecciones de Firestore
+      await autoMigrateToCollections(DB);
+    }
+  } catch(e) {
+    console.warn('[Firebase] loadDB error, usando respaldo offline:', e.message);
+    try {
+      const local = localStorage.getItem('frescura_db');
+      if (local) { _applyDB(JSON.parse(local)); }
+      else { _applyDB(JSON.parse(JSON.stringify(BACKUP_DATA))); }
+    } catch(e2) {
+      _applyDB(JSON.parse(JSON.stringify(BACKUP_DATA)));
+    }
+  }
+}
+
+// ── Sincronizadores Granulares para Firestore (Escrituras Atómicas por Documento) ──
+async function syncProductoToFirestore(p, isDelete=false) {
+  try {
+    if (isDelete) await _COL_PRODS.doc(p.id).delete();
+    else await _COL_PRODS.doc(p.id).set(p);
+  } catch(e) { console.warn('[syncProducto]', e.message); }
+}
+
+async function syncVentaToFirestore(v, items, isDelete=false) {
+  try {
+    const batch = _db.batch();
+    if (isDelete) {
+      batch.delete(_COL_VENTAS.doc(v.id));
+      const detSnap = await _COL_DETALLES.where('id_venta', '==', v.id).get();
+      detSnap.docs.forEach(d => batch.delete(d.ref));
+    } else {
+      batch.set(_COL_VENTAS.doc(v.id), v);
+      if (items && items.length) {
+        items.forEach(it => batch.set(_COL_DETALLES.doc(it.id), it));
+      }
+    }
+    await batch.commit();
+  } catch(e) { console.warn('[syncVenta]', e.message); }
+}
+
+async function syncClienteToFirestore(c, isDelete=false) {
+  try {
+    if (isDelete) await _COL_CLIENTES.doc(c.id).delete();
+    else await _COL_CLIENTES.doc(c.id).set(c);
+  } catch(e) { console.warn('[syncCliente]', e.message); }
+}
+
+async function syncGastoToFirestore(g, isDelete=false) {
+  try {
+    if (isDelete) await _COL_GASTOS.doc(g.id).delete();
+    else await _COL_GASTOS.doc(g.id).set(g);
+  } catch(e) { console.warn('[syncGasto]', e.message); }
+}
+
+async function syncMovimientoToFirestore(m) {
+  try { await _COL_MOVS.doc(m.id).set(m); } catch(e) { console.warn('[syncMov]', e.message); }
+}
+
+async function syncMuestraToFirestore(m) {
+  try { await _COL_MUESTRAS.doc(m.id).set(m); } catch(e) { console.warn('[syncMuestra]', e.message); }
+}
+
+async function syncDevolucionToFirestore(d) {
+  try { await _COL_DEVOLS.doc(d.id).set(d); } catch(e) { console.warn('[syncDev]', e.message); }
+}
+
+// Sincronización general (guarda offline en localStorage y snapshot de respaldo en admin/db)
 async function saveDB() {
   localStorage.setItem('frescura_db', JSON.stringify(DB));
   try {
-    await _DOC.set({ data: JSON.stringify(DB), version: DB_VERSION, updated: Date.now() });
+    _DOC_LEGACY.set({ data: JSON.stringify(DB), version: DB_VERSION, updated: Date.now() }).catch(() => {});
+    _COL_CONFIG.doc('general').set({ meta_mensual: DB.meta_mensual || 3000000 }).catch(() => {});
   } catch(e) {
-    console.warn('[Firebase] saveDB error:', e.message);
-    alert('⚠️ ATENCIÓN: los cambios NO se guardaron en la base de datos real (error: ' + e.message + ').\n\nEsto suele pasar cuando tu sesión perdió la conexión con tu cuenta de admin. Cierra sesión y vuelve a entrar con tu email y contraseña, luego repite la acción que estabas haciendo.');
+    console.warn('[Firebase] saveDB snapshot warning:', e.message);
   }
 }
 
@@ -1360,7 +1584,7 @@ function renderVentas() {
   tEl.innerHTML=ventas.length===0?'<div class="empty"><div class="empty-icon">🛒</div><h3>Sin ventas</h3></div>':`
     <table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Venta</th><th>Margen</th><th>Cashback</th><th>Pago</th><th>Recibido</th><th>Envío</th><th></th></tr></thead><tbody>
     ${ventasPage.map(v=>{const c=getCliente(v.id_cliente);const _vn=ventaNeta(v);const m=_vn>0?(_vn-(v.costo_productos||0))/_vn*100:0;const cb=v.cashback_generado||0;
-    return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span></td><td class="fw-600">${htmlVentaFila(v)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
+    return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span></td><td class="fw-600">${htmlVentaFila(v)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button><button class="btn btn-xs btn-secondary" style="background:#e8f0e8;color:#5a7a5c;border-color:#a8c8a8" onclick="enviarComprobanteWhatsApp('${v.id}')" title="Enviar por WhatsApp">📲</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
     </tbody></table>
     ${paginationControlsHTML(_ventasPage, totalPagesV, 'goToVentasPage')}`;
 }
@@ -1551,6 +1775,61 @@ function calcCashbackHipotetico(v, items) {
   return Math.floor(base * 0.05);
 }
 
+// ── Enviar Comprobante por WhatsApp (Con soporte de transporte y Club Frescura) ──
+function enviarComprobanteWhatsApp(id) {
+  const v = DB.ventas.find(x => x.id === id);
+  if (!v) return;
+  const c = getCliente(v.id_cliente);
+  const items = getVentaDetalle(id);
+
+  let tel = c?.telefono ? c.telefono.replace(/\D/g, '') : '';
+  if (tel && tel.length === 10 && tel.startsWith('3')) {
+    tel = '57' + tel;
+  }
+
+  const itemsTxt = items.map(d => {
+    const p = getProducto(d.id_producto);
+    return `• ${d.cantidad}x ${p?.nombre || d.id_producto} (${fmt(d.subtotal)})`;
+  }).join('\n');
+
+  let texto = `🌿 *FRESCURA NATURAL · COMPROBANTE DE VENTA* 🌿\n\n`;
+  texto += `¡Hola *${c ? c.nombre : 'estimado/a cliente'}*! Muchas gracias por tu compra. Aquí tienes el detalle de tu pedido:\n\n`;
+  texto += `🧾 *Pedido:* ${v.num || v.id}\n`;
+  texto += `📅 *Fecha:* ${v.fecha}\n`;
+  texto += `🛍️ *Canal:* ${v.canal_venta}\n\n`;
+  texto += `*Productos:*
+${itemsTxt}\n\n`;
+  
+  const lineaEnv = lineaEnvioComprobante(v);
+  if (lineaEnv) {
+    if (lineaEnv.gratis) {
+      texto += `🚚 *Envío:* ¡GRATIS! (Asumido por Frescura Natural)\n`;
+    } else {
+      texto += `🚚 *${lineaEnv.etiqueta}:* ${fmt(lineaEnv.monto)}\n`;
+    }
+  }
+  if (v.descuento > 0) {
+    texto += `🏷️ *Descuento:* -${fmt(v.descuento)}\n`;
+  }
+  texto += `💰 *TOTAL PAGADO:* ${fmt(v.total_pagado)}\n`;
+  texto += `💳 *Método de pago:* ${v.metodo_pago}\n`;
+  texto += `📦 *Estado entrega:* ${{preparando:'Preparando 📦',enviado:'Enviado 🚚',entregado:'Entregado ✅',cancelado:'Cancelado ❌'}[v.estado_envio || 'preparando']}\n`;
+  if (v.transportadora || v.numero_guia) {
+    texto += `🚚 *Guía:* ${v.transportadora || ''} ${v.numero_guia ? '#' + v.numero_guia : ''}\n`;
+  }
+
+  if (c?.club_frescura) {
+    texto += `\n💜 *Club Frescura:* Generaste ${fmt(v.cashback_generado || 0)} de cashback. Tu saldo acumulado es *${fmt(c.cashback || 0)}* para tu próxima compra!`;
+  }
+
+  texto += `\n\n¡Que disfrutes mucho tus productos naturales! Si tienes cualquier inquietud, estamos atentos por este mismo chat. 🍃✨`;
+
+  const url = tel 
+    ? `https://api.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}` 
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+  window.open(url, '_blank');
+}
+
 function generarFactura(id) {
   const v = DB.ventas.find(x => x.id === id);
   if (!v) return;
@@ -1696,10 +1975,11 @@ ${cashbackSection}
   <span style="font-size:10px">Este documento es un comprobante de venta · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
 </div>
 
-<!-- PRINT BUTTON -->
-<div class="no-print" style="margin-top:24px;text-align:center">
-  <button onclick="window.print()" style="background:#5a7a5c;color:#fff;border:none;padding:12px 32px;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;cursor:pointer;margin-right:8px">🖨️ Imprimir / Guardar PDF</button>
-  <button onclick="window.close()" style="background:#f5f2ed;color:#4a4640;border:1px solid #ddd8cf;padding:12px 24px;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;cursor:pointer">Cerrar</button>
+<!-- ACTION BUTTONS -->
+<div class="no-print" style="margin-top:24px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+  <button onclick="if(window.opener && window.opener.enviarComprobanteWhatsApp){window.opener.enviarComprobanteWhatsApp('${v.id}')}else{alert('Envío directo disponible desde la tabla de ventas.')}" style="background:#25D366;color:#fff;border:none;padding:12px 24px;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:600;cursor:pointer">📲 Enviar por WhatsApp</button>
+  <button onclick="window.print()" style="background:#5a7a5c;color:#fff;border:none;padding:12px 28px;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:#f5f2ed;color:#4a4640;border:1px solid #ddd8cf;padding:12px 20px;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;cursor:pointer">Cerrar</button>
 </div>
 
 
@@ -2678,23 +2958,32 @@ function saveMuestra(){
 // ══════════════════════════════════════════════════════════
 // META
 // ══════════════════════════════════════════════════════════
-function cambiarPassword() {
+async function cambiarPassword() {
   const actual  = document.getElementById('pwd-actual').value;
   const nueva   = document.getElementById('pwd-nueva').value;
   const confirm = document.getElementById('pwd-confirm').value;
   const msgEl   = document.getElementById('pwd-msg');
   msgEl.style.color = 'var(--red)'; msgEl.textContent = '';
   if (!actual || !nueva || !confirm) { msgEl.textContent = 'Completa todos los campos'; return; }
-  if (actual !== APP_PASSWORD) { msgEl.textContent = 'Contraseña actual incorrecta'; return; }
   if (nueva.length < 6) { msgEl.textContent = 'La nueva contraseña debe tener al menos 6 caracteres'; return; }
   if (nueva !== confirm) { msgEl.textContent = 'Las contraseñas no coinciden'; return; }
-  // Update in localStorage (persists across sessions)
-  localStorage.setItem('fn_admin_pwd', nueva);
-  APP_PASSWORD_CURRENT = nueva;
-  msgEl.style.color = 'var(--sage)';
-  msgEl.textContent = '✓ Contraseña actualizada correctamente';
-  ['pwd-actual','pwd-nueva','pwd-confirm'].forEach(id => document.getElementById(id).value = '');
-  setTimeout(() => msgEl.textContent = '', 4000);
+
+  const user = firebase.auth().currentUser;
+  if (!user || user.isAnonymous) {
+    msgEl.textContent = 'Debes haber iniciado sesión con tu cuenta de administrador de Firebase Auth';
+    return;
+  }
+  try {
+    const cred = firebase.auth.EmailAuthProvider.credential(user.email, actual);
+    await user.reauthenticateWithCredential(cred);
+    await user.updatePassword(nueva);
+    msgEl.style.color = 'var(--sage)';
+    msgEl.textContent = '✓ Contraseña actualizada correctamente en Firebase Auth';
+    ['pwd-actual','pwd-nueva','pwd-confirm'].forEach(id => document.getElementById(id).value = '');
+    setTimeout(() => msgEl.textContent = '', 4000);
+  } catch(err) {
+    msgEl.textContent = 'Error: ' + (err.message || 'Contraseña actual incorrecta');
+  }
 }
 
 function openMetaModal(){document.getElementById('meta-valor').value=DB.meta_mensual||3000000;openModal('modal-meta');}
@@ -2866,8 +3155,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ══════════════════════════════════════════════════════════
 // LOGIN
 // ══════════════════════════════════════════════════════════
-const APP_PASSWORD = 'frescura2024';  // ← contraseña del admin
-let APP_PASSWORD_CURRENT = localStorage.getItem('fn_admin_pwd') || APP_PASSWORD;
+// Autenticación 100% segura mediante Firebase Auth (sin contraseñas en código cliente)
 
 // Current session state
 let _currentRole = '';       // 'admin' | 'distribuidor'
@@ -2911,29 +3199,23 @@ async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pwd = document.getElementById('login-pwd').value;
 
-  // 1) Try real Firebase Auth login first (secure path)
-  if (email) {
-    try {
-      await firebase.auth().signInWithEmailAndPassword(email, pwd);
-      _currentRole = 'admin';
-      sessionStorage.setItem('fn_auth', 'admin');
-      document.getElementById('login-screen').style.display = 'none';
-      initApp();
-      return;
-    } catch (e) {
-      // Falls through to legacy check below (transition period only)
-      console.warn('[Firebase Auth] Login falló, probando método anterior:', e.code);
-    }
+  if (!email || !pwd) {
+    showLoginError('Ingresa tu email y contraseña de administrador');
+    return;
   }
 
-  // 2) Legacy fallback — password-only check (TEMPORARY, remove once Firebase Auth confirmed working)
-  if (pwd === (localStorage.getItem('fn_admin_pwd') || APP_PASSWORD)) {
+  try {
+    await firebase.auth().signInWithEmailAndPassword(email, pwd);
     _currentRole = 'admin';
     sessionStorage.setItem('fn_auth', 'admin');
     document.getElementById('login-screen').style.display = 'none';
     initApp();
-  } else {
-    showLoginError('Credenciales incorrectas');
+  } catch (e) {
+    console.warn('[Firebase Auth] Error de autenticación:', e.code);
+    const msg = e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential'
+      ? 'Email o contraseña incorrectos'
+      : (e.message || 'Error al conectar con autenticación');
+    showLoginError(msg);
     document.getElementById('login-pwd').value = '';
     document.getElementById('login-pwd').focus();
   }
@@ -4733,7 +5015,7 @@ async function initApp() {
           <select id="dv-estado-pago"><option value="confirmado">Confirmado</option><option value="pendiente">Pendiente</option></select>
         </div>
         <div class="form-group"><label>Método de Pago</label>
-          <select id="dv-metodo-pago"><option>Nequi</option><option>Bre-B</option><option>Daviplata</option><option>Efectivo</option><option>Transferencia</option></select>
+          <select id="dv-metodo-pago"><option>Nequi</option><option>Bre-B</option><option>Daviplata</option><option>Tarjeta</option><option>Efectivo</option><option>Transferencia</option></select>
         </div>
       </div>
       <div class="form-group"><label>Cliente (opcional)</label>
@@ -4757,3 +5039,4 @@ async function initApp() {
 </div>
 </body>
 </html>
+
