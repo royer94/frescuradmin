@@ -902,12 +902,12 @@ textarea{resize:vertical;min-height:80px}
       <button class="modal-close" onclick="closeModal('modal-factura')">✕</button>
     </div>
     
-    <div class="modal-body" style="overflow-y:auto;padding:20px;background:#f5f3ef;flex:1">
-      <div id="comprobante-card" style="background:#fff;padding:28px 24px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.06);max-width:600px;margin:0 auto">
+    <div class="modal-body" style="overflow-y:auto;padding:14px 10px;background:#f5f3ef;flex:1">
+      <div id="comprobante-card" style="background:#fff;padding:24px 20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.06);max-width:580px;width:100%;box-sizing:border-box;margin:0 auto;overflow:hidden">
         <!-- Contenido dinámico del comprobante -->
       </div>
       
-      <div id="factura-toast" style="display:none;max-width:600px;margin:14px auto 0 auto;background:#e8f4fd;border:1px solid #b6d4fe;border-radius:6px;padding:12px 16px;font-size:13px;color:#084298;line-height:1.5;text-align:center"></div>
+      <div id="factura-toast" style="display:none;max-width:580px;margin:14px auto 0 auto;background:#e8f4fd;border:1px solid #b6d4fe;border-radius:6px;padding:12px 16px;font-size:13px;color:#084298;line-height:1.5;text-align:center"></div>
     </div>
     
     <div class="modal-footer" style="padding:14px 20px;border-top:1px solid var(--border);margin-top:0;justify-content:center;gap:10px;flex-wrap:wrap">
@@ -1920,75 +1920,75 @@ function generarFactura(id) {
   const itemsHTML = items.map(d => {
     const p = getProducto(d.id_producto);
     return `<tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;color:#1e1c18">${p?.nombre || d.id_producto}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:center;color:#1e1c18">${d.cantidad}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:right;color:#1e1c18">${fmt2(d.precio_unitario)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e8e4dc;text-align:right;font-weight:600;color:#1e1c18">${fmt2(d.subtotal)}</td>
+      <td style="padding:8px 8px;border-bottom:1px solid #e8e4dc;color:#1e1c18;word-break:break-word;font-size:12px;box-sizing:border-box">${p?.nombre || d.id_producto}</td>
+      <td style="padding:8px 4px;border-bottom:1px solid #e8e4dc;text-align:center;color:#1e1c18;font-size:12px;box-sizing:border-box">${d.cantidad}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #e8e4dc;text-align:right;color:#1e1c18;font-size:12px;white-space:nowrap;box-sizing:border-box">${fmt2(d.precio_unitario)}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #e8e4dc;text-align:right;font-weight:600;color:#1e1c18;font-size:12px;white-space:nowrap;box-sizing:border-box">${fmt2(d.subtotal)}</td>
     </tr>`;
   }).join('');
 
   const cashbackSection = esClub
-    ? `<div style="background:#f0e8f5;border:1px solid #c8a8d8;border-radius:6px;padding:16px 20px;margin-top:20px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span style="font-size:18px">💜</span>
-          <span style="font-family:'Georgia',serif;font-size:15px;font-weight:700;color:#5a2d82">Club Frescura Natural</span>
+    ? `<div style="background:#f0e8f5;border:1px solid #c8a8d8;border-radius:6px;padding:14px 16px;margin-top:16px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">💜</span>
+          <span style="font-family:'Georgia',serif;font-size:14px;font-weight:700;color:#5a2d82">Club Frescura Natural</span>
         </div>
         ${cb > 0
-          ? `<div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
+          ? `<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px">
               <span style="color:#4a4640">Cashback generado esta compra (5%):</span>
               <span style="font-weight:700;color:#5a2d82">+${fmt2(cb)}</span>
             </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px">
               <span style="color:#4a4640">Saldo total acumulado:</span>
               <span style="font-weight:700;color:#5a2d82">${fmt2(cbTotal)}</span>
             </div>
-            <div style="font-size:11px;color:#8a6aaa;margin-top:8px;border-top:1px solid #c8a8d8;padding-top:8px">
+            <div style="font-size:11px;color:#8a6aaa;margin-top:6px;border-top:1px solid #c8a8d8;padding-top:6px">
               ✓ Tu cashback es válido para descontar en tu próxima compra sin combinar con otras promociones.
             </div>`
-          : `<div style="font-size:13px;color:#8a6aaa">
+          : `<div style="font-size:12px;color:#8a6aaa">
               Esta compra incluía un descuento, por lo que no genera cashback según las reglas del Club.<br>
               <strong style="color:#5a2d82">Tu saldo disponible: ${fmt2(cbTotal)}</strong>
             </div>`
         }
       </div>`
-    : `<div style="background:#f5f2ed;border:1px solid #c8b89a;border-left:3px solid #8a6c3a;border-radius:6px;padding:16px 20px;margin-top:20px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:18px">🌿</span>
-          <span style="font-family:'Georgia',serif;font-size:14px;font-weight:700;color:#8a6c3a">¡Únete al Club Frescura Natural!</span>
+    : `<div style="background:#f5f2ed;border:1px solid #c8b89a;border-left:3px solid #8a6c3a;border-radius:6px;padding:14px 16px;margin-top:16px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:16px">🌿</span>
+          <span style="font-family:'Georgia',serif;font-size:13px;font-weight:700;color:#8a6c3a">¡Únete al Club Frescura Natural!</span>
         </div>
-        <div style="font-size:13px;color:#4a4640;line-height:1.6">
+        <div style="font-size:12px;color:#4a4640;line-height:1.5">
           Como miembro del Club Frescura obtienes <strong>5% de cashback</strong> en cada compra para usar en la siguiente.<br>
-          ${cbHip > 0 ? `Esta compra te habría generado <strong style="color:#5a2d82">+${fmt2(cbHip)}</strong> de cashback.<br><br>` : '<br>'}
-          <strong>Escríbenos para activar tu membresía sin costo 💚</strong>
+          ${cbHip > 0 ? `Esta compra te habría generado <strong style="color:#5a2d82">+${fmt2(cbHip)}</strong> de cashback.<br>` : ''}
+          <strong style="display:inline-block;margin-top:4px">Activa tu membresía en <a href="https://frescuranaturalcosmeticos.com/club-frescura/" target="_blank" style="color:#5a7a5c;text-decoration:underline;word-break:break-all">https://frescuranaturalcosmeticos.com/club-frescura/</a> 💚</strong>
         </div>
       </div>`;
 
   const cardHTML = `
     <!-- HEADER -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:2px solid #1e1c18;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2px solid #1e1c18;margin-bottom:16px;gap:10px;box-sizing:border-box">
       <div>
-        <div style="font-family:'Georgia',serif;font-size:24px;font-weight:700;color:#1e1c18;letter-spacing:-0.5px">Frescura Natural</div>
-        <div style="font-size:11px;color:#8a847a;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Cosméticos Artesanales</div>
+        <div style="font-family:'Georgia',serif;font-size:22px;font-weight:700;color:#1e1c18;letter-spacing:-0.5px">Frescura Natural</div>
+        <div style="font-size:10px;color:#8a847a;letter-spacing:1.5px;text-transform:uppercase;margin-top:2px">Cosméticos Artesanales</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:11px;color:#8a847a;letter-spacing:1px;text-transform:uppercase">Comprobante de Venta</div>
-        <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:600;margin-top:4px;color:#1e1c18">${v.id}</div>
-        <div style="font-size:12px;color:#4a4640;margin-top:2px">${v.fecha}</div>
+        <div style="font-size:10px;color:#8a847a;letter-spacing:1px;text-transform:uppercase">Comprobante de Venta</div>
+        <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;margin-top:2px;color:#1e1c18">${v.id}</div>
+        <div style="font-size:11px;color:#4a4640;margin-top:2px">${v.fecha}</div>
       </div>
     </div>
 
     <!-- DATOS GENERALES -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;box-sizing:border-box">
       <div>
-        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Cliente</div>
-        <div style="font-weight:600;font-size:14px;color:#1e1c18">${c?.nombre || 'Cliente no registrado'}</div>
-        ${c?.telefono ? `<div style="color:#4a4640;font-size:12px;margin-top:2px">${c.telefono}</div>` : ''}
-        ${c?.ciudad ? `<div style="color:#4a4640;font-size:12px">${c.ciudad}</div>` : ''}
-        ${c?.direccion ? `<div style="color:#4a4640;font-size:12px">${c.direccion}</div>` : ''}
+        <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;margin-bottom:4px">Cliente</div>
+        <div style="font-weight:600;font-size:13px;color:#1e1c18;word-break:break-word">${c?.nombre || 'Cliente no registrado'}</div>
+        ${c?.telefono ? `<div style="color:#4a4640;font-size:11.5px;margin-top:2px">${c.telefono}</div>` : ''}
+        ${c?.ciudad ? `<div style="color:#4a4640;font-size:11.5px;word-break:break-word">${c.ciudad}</div>` : ''}
+        ${c?.direccion ? `<div style="color:#4a4640;font-size:11.5px;word-break:break-word">${c.direccion}</div>` : ''}
       </div>
       <div>
-        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a847a;margin-bottom:6px">Detalles</div>
-        <div style="font-size:12px;color:#4a4640;line-height:1.8">
+        <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;margin-bottom:4px">Detalles</div>
+        <div style="font-size:11.5px;color:#4a4640;line-height:1.7">
           Canal: <strong style="color:#1e1c18">${v.canal_venta}</strong><br>
           Pago: <strong style="color:#1e1c18">${v.metodo_pago}</strong><br>
           Estado: <strong style="color:#5a7a5c">✓ Confirmado</strong>
@@ -1997,31 +1997,31 @@ function generarFactura(id) {
     </div>
 
     <!-- TABLA DE PRODUCTOS -->
-    <table style="width:100%;border-collapse:collapse;margin-bottom:0">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:0;table-layout:fixed;box-sizing:border-box">
       <thead>
         <tr style="background:#f5f2ed">
-          <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Producto</th>
-          <th style="padding:10px 12px;text-align:center;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Cant.</th>
-          <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Precio</th>
-          <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a847a;font-weight:500">Subtotal</th>
+          <th style="padding:8px 6px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#8a847a;font-weight:600;width:46%;box-sizing:border-box">Producto</th>
+          <th style="padding:8px 4px;text-align:center;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#8a847a;font-weight:600;width:12%;box-sizing:border-box">Cant.</th>
+          <th style="padding:8px 6px;text-align:right;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#8a847a;font-weight:600;width:21%;box-sizing:border-box">Precio</th>
+          <th style="padding:8px 6px;text-align:right;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#8a847a;font-weight:600;width:21%;box-sizing:border-box">Subtotal</th>
         </tr>
       </thead>
       <tbody>${itemsHTML}</tbody>
     </table>
 
     <!-- TOTALES -->
-    <div style="margin-top:0;border-top:2px solid #1e1c18;padding-top:12px">
+    <div style="margin-top:0;border-top:2px solid #1e1c18;padding-top:10px;box-sizing:border-box">
       ${(() => { const e = lineaEnvioComprobante(v); return e ? `
-      <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#4a4640">
+      <div style="display:flex;justify-content:space-between;padding:3px 6px;font-size:12px;color:#4a4640;box-sizing:border-box">
         <span>${e.etiqueta}</span>${e.gratis ? '<span style="color:#5a7a5c;font-weight:600">GRATIS</span>' : `<span>${fmt2(e.monto)}</span>`}
       </div>` : ''; })()}
       ${v.descuento > 0 ? `
-      <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:13px;color:#9b3a3a">
+      <div style="display:flex;justify-content:space-between;padding:3px 6px;font-size:12px;color:#9b3a3a;box-sizing:border-box">
         <span>Descuento</span><span>-${fmt2(v.descuento)}</span>
       </div>` : ''}
-      <div style="display:flex;justify-content:space-between;padding:10px 12px;font-size:15px;font-weight:700;background:#f5f2ed;border-radius:4px;margin-top:4px;color:#1e1c18">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;font-size:14px;font-weight:700;background:#f5f2ed;border-radius:4px;margin-top:4px;color:#1e1c18;box-sizing:border-box">
         <span>Total Pagado</span>
-        <span style="font-family:'Georgia',serif;font-size:18px">${fmt2(v.total_pagado)}</span>
+        <span style="font-family:'Georgia',serif;font-size:17px">${fmt2(v.total_pagado)}</span>
       </div>
     </div>
 
@@ -2029,9 +2029,9 @@ function generarFactura(id) {
     ${cashbackSection}
 
     <!-- FOOTER -->
-    <div style="margin-top:24px;padding-top:14px;border-top:1px solid #e8e4dc;text-align:center;font-size:11px;color:#8a847a;line-height:1.8">
+    <div style="margin-top:20px;padding-top:12px;border-top:1px solid #e8e4dc;text-align:center;font-size:10px;color:#8a847a;line-height:1.6;box-sizing:border-box">
       Gracias por tu compra 🌿 · Frescura Natural Cosméticos · Hecho con amor en Colombia<br>
-      <span style="font-size:10px">Este documento es un comprobante de venta · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
+      <span style="font-size:9.5px">Este documento es un comprobante de venta · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</span>
     </div>
   `;
 
@@ -2072,13 +2072,52 @@ async function enviarComprobanteModal() {
       throw new Error('html2canvas no disponible');
     }
 
-    const canvas = await html2canvas(card, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false
-    });
+    // Crear clon fuera de pantalla con ancho fijo para captura perfecta y márgenes simétricos
+    const cloneWrapper = document.createElement('div');
+    cloneWrapper.style.position = 'fixed';
+    cloneWrapper.style.left = '-9999px';
+    cloneWrapper.style.top = '0';
+    cloneWrapper.style.width = '580px';
+    cloneWrapper.style.maxWidth = '580px';
+    cloneWrapper.style.minWidth = '580px';
+    cloneWrapper.style.background = '#ffffff';
+    cloneWrapper.style.zIndex = '-9999';
+    cloneWrapper.style.boxSizing = 'border-box';
+    cloneWrapper.style.padding = '0';
+    cloneWrapper.style.margin = '0';
+
+    const cardClone = card.cloneNode(true);
+    cardClone.id = 'comprobante-card-capture';
+    cardClone.style.width = '580px';
+    cardClone.style.maxWidth = '580px';
+    cardClone.style.minWidth = '580px';
+    cardClone.style.boxSizing = 'border-box';
+    cardClone.style.background = '#ffffff';
+    cardClone.style.padding = '28px 24px';
+    cardClone.style.margin = '0';
+    cardClone.style.boxShadow = 'none';
+    cardClone.style.borderRadius = '0';
+    cardClone.style.overflow = 'visible';
+
+    cloneWrapper.appendChild(cardClone);
+    document.body.appendChild(cloneWrapper);
+
+    let canvas;
+    try {
+      canvas = await html2canvas(cardClone, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: 580,
+        windowWidth: 580,
+        scrollX: 0,
+        scrollY: 0,
+        logging: false
+      });
+    } finally {
+      document.body.removeChild(cloneWrapper);
+    }
 
     let blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     if (!blob) {
@@ -2172,7 +2211,7 @@ function imprimirFacturaModal() {
   printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comprobante</title><style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:'Outfit',sans-serif; font-size:13px; color:#1e1c18; padding:30px; background:#fff; }
+    body { font-family:'Outfit',sans-serif; font-size:13px; color:#1e1c18; padding:30px 24px; background:#fff; max-width:620px; margin:0 auto; }
     @page { margin:10mm; size:A4; }
   </style></head><body>` + card.innerHTML + `</body></html>`);
   printWindow.document.close();
