@@ -291,6 +291,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="nav-section">Principal</div>
     <div class="nav-item active" onclick="nav('dashboard')"><span class="icon">📊</span><span>Dashboard</span></div>
     <div class="nav-item" onclick="nav('ventas')"><span class="icon">🛒</span><span>Ventas</span></div>
+    <div class="nav-item" onclick="nav('pedidos_web')"><span class="icon">🌐</span><span>Pedidos Web</span></div>
     <div class="nav-item" onclick="nav('inventario')"><span class="icon">📦</span><span>Inventario</span></div>
     <div class="nav-section">Finanzas</div>
     <div class="nav-item" onclick="nav('gastos')"><span class="icon">💸</span><span>Gastos</span></div>
@@ -352,6 +353,29 @@ textarea{resize:vertical;min-height:80px}
           <div class="card-header"><span class="card-title">Stock Crítico</span><button class="btn btn-secondary btn-xs" onclick="nav('inventario')">Ver inventario →</button></div>
           <div class="card-body" id="stock-alerts-body"></div>
         </div>
+      </div>
+    </div>
+
+
+    <!-- PEDIDOS TIENDA WEB -->
+    <div class="page" id="page-pedidos_web">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="search-pedidos-web" placeholder="Buscar por ref, cliente, ciudad..." style="width:240px" oninput="renderPedidosWeb()">
+          <select id="filter-estado-web" onchange="renderPedidosWeb()" style="width:auto">
+            <option value="">Todos los estados</option>
+            <option value="pendiente_confirmacion" selected>Pendientes de confirmación</option>
+            <option value="confirmado">Confirmados</option>
+            <option value="cancelado">Cancelados</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="renderPedidosWeb()">🔄 Actualizar Pedidos Web</button>
+        </div>
+      </div>
+      <div id="pedidos-web-kpis" style="margin-bottom:16px"></div>
+      <div class="card" id="pedidos-web-list">
+        <div class="card-body" style="color:var(--ink3);font-style:italic;padding:20px">Cargando pedidos web...</div>
       </div>
     </div>
 
@@ -1425,7 +1449,7 @@ function recalcCashbackHistorico() {
 // ══════════════════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════════════════
-const pageTitles = {dashboard:'Dashboard',ventas:'Ventas',inventario:'Inventario',gastos:'Gastos',flujo:'Flujo de Caja',productos:'Productos',clientes:'Clientes',devoluciones:'Devoluciones',distribuidores:'Distribuidores',reportes:'Reportes'};
+const pageTitles = {dashboard:'Dashboard',ventas:'Ventas',pedidos_web:'Pedidos Tienda Web',inventario:'Inventario',gastos:'Gastos',flujo:'Flujo de Caja',productos:'Productos',clientes:'Clientes',devoluciones:'Devoluciones',distribuidores:'Distribuidores',reportes:'Reportes'};
 
 function nav(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1434,10 +1458,10 @@ function nav(page) {
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')?.includes(`'${page}'`))n.classList.add('active');});
   document.getElementById('page-title').textContent = pageTitles[page]||page;
   const actionBtn = document.getElementById('topbar-action');
-  const topActions = {dashboard:'+ Registrar Venta',ventas:'+ Nueva Venta',inventario:'+ Entrada',gastos:'+ Gasto',flujo:'',productos:'+ Producto',clientes:'+ Cliente',devoluciones:'+ Nueva Devolución',distribuidores:'+ Nuevo Distribuidor',reportes:''};
+  const topActions = {dashboard:'+ Registrar Venta',ventas:'+ Nueva Venta',pedidos_web:'🔄 Actualizar',inventario:'+ Entrada',gastos:'+ Gasto',flujo:'',productos:'+ Producto',clientes:'+ Cliente',devoluciones:'+ Nueva Devolución',distribuidores:'+ Nuevo Distribuidor',reportes:''};
   actionBtn.textContent = topActions[page]||'';
   actionBtn.style.display = topActions[page]?'':'none';
-  actionBtn.onclick = ()=>{const m={dashboard:openModalVenta,ventas:openModalVenta,inventario:openModalEntrada,gastos:openModalGasto,productos:openModalProducto,clientes:openModalCliente,devoluciones:openModalDevolucion,distribuidores:openModalNuevoDist};if(m[page])m[page]();};
+  actionBtn.onclick = ()=>{const m={dashboard:openModalVenta,ventas:openModalVenta,pedidos_web:renderPedidosWeb,inventario:openModalEntrada,gastos:openModalGasto,productos:openModalProducto,clientes:openModalCliente,devoluciones:openModalDevolucion,distribuidores:openModalNuevoDist};if(m[page])m[page]();};
   renderPage(page);
   window.scrollTo(0,0);
   quitarNavDot(page); // el admin ya revisó esta sección, se quita el aviso pendiente
@@ -1465,7 +1489,7 @@ function quitarNavDot(page) {
 }
 
 function renderPage(p) {
-  const fn={dashboard:renderDashboard,ventas:renderVentas,inventario:renderInventario,gastos:renderGastos,flujo:renderFlujo,productos:renderProductos,clientes:renderClientes,devoluciones:renderDevoluciones,distribuidores:renderDistribuidores,reportes:renderReportes};
+  const fn={dashboard:renderDashboard,ventas:renderVentas,pedidos_web:renderPedidosWeb,inventario:renderInventario,gastos:renderGastos,flujo:renderFlujo,productos:renderProductos,clientes:renderClientes,devoluciones:renderDevoluciones,distribuidores:renderDistribuidores,reportes:renderReportes};
   if(fn[p])fn[p]();
 }
 
@@ -3998,6 +4022,349 @@ async function resolverCanje(canjeId, decision) {
   } catch(e) { alert('Error al resolver canje: ' + e.message); }
 }
 
+async 
+// ══════════════════════════════════════════════════════════════════
+// INTEGRACIÓN TIENDA WEB (PEDIDOS_WEB FIRESTORE)
+// ══════════════════════════════════════════════════════════════════
+let _pedidosWebCache = [];
+
+async function renderPedidosWeb() {
+  const el = document.getElementById('pedidos-web-list');
+  const kpisEl = document.getElementById('pedidos-web-kpis');
+  if (!el) return;
+
+  if (_pedidosWebCache.length === 0) {
+    el.innerHTML = '<div class="card-body" style="color:var(--ink3);font-style:italic;padding:20px">Cargando pedidos web...</div>';
+  }
+
+  try {
+    const snap = await _db.collection('pedidos_web').get();
+    _pedidosWebCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.warn('[pedidos_web] error fetching:', err.message);
+  }
+
+  let pedidos = [..._pedidosWebCache];
+
+  // Ordenar por fecha descendente
+  pedidos.sort((a, b) => {
+    const tA = a.fecha?.seconds ? (a.fecha.seconds * 1000) : new Date(a.fecha || 0).getTime();
+    const tB = b.fecha?.seconds ? (b.fecha.seconds * 1000) : new Date(b.fecha || 0).getTime();
+    return tB - tA;
+  });
+
+  // KPIs
+  const pendientes = pedidos.filter(p => (p.estado || 'pendiente_confirmacion') === 'pendiente_confirmacion');
+  const confirmados = pedidos.filter(p => p.estado === 'confirmado');
+  const totalFacturado = confirmados.reduce((acc, p) => acc + (Number(p.total) || 0), 0);
+
+  if (kpisEl) {
+    kpisEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px">
+        <div class="kpi-card">
+          <div class="kpi-label">Pedidos Web Totales</div>
+          <div class="kpi-value">${pedidos.length}</div>
+          <div class="kpi-sub">Recibidos desde la tienda</div>
+        </div>
+        <div class="kpi-card" style="border-left:3px solid #d4a373">
+          <div class="kpi-label">Pendientes Confirmación</div>
+          <div class="kpi-value" style="color:#d4a373">${pendientes.length}</div>
+          <div class="kpi-sub">Requieren tu aprobación</div>
+        </div>
+        <div class="kpi-card" style="border-left:3px solid #5a7a5c">
+          <div class="kpi-label">Pedidos Confirmados</div>
+          <div class="kpi-value" style="color:#5a7a5c">${confirmados.length}</div>
+          <div class="kpi-sub">Registrados en Ventas</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Ventas Web Facturadas</div>
+          <div class="kpi-value kpi-up">${fmt(totalFacturado)}</div>
+          <div class="kpi-sub">Ingresos confirmados</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Filtrado
+  const q = document.getElementById('search-pedidos-web')?.value.toLowerCase().trim() || '';
+  const filterEstado = document.getElementById('filter-estado-web')?.value || '';
+
+  if (filterEstado) {
+    pedidos = pedidos.filter(p => (p.estado || 'pendiente_confirmacion') === filterEstado);
+  }
+  if (q) {
+    pedidos = pedidos.filter(p =>
+      (p.ref || '').toLowerCase().includes(q) ||
+      (p.cliente_nombre || '').toLowerCase().includes(q) ||
+      (p.ciudad || '').toLowerCase().includes(q) ||
+      (p.cliente_telefono || '').includes(q) ||
+      (p.cliente_email || '').toLowerCase().includes(q)
+    );
+  }
+
+  if (pedidos.length === 0) {
+    el.innerHTML = `
+      <div class="empty" style="padding:40px;text-align:center">
+        <div class="empty-icon" style="font-size:36px;margin-bottom:10px">🌐</div>
+        <h3 style="font-weight:600;margin-bottom:6px">Sin pedidos web</h3>
+        <p style="color:var(--ink3);font-size:13px">No se encontraron pedidos con los filtros seleccionados.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const rows = pedidos.map(p => {
+    const rawFecha = p.fecha?.seconds ? new Date(p.fecha.seconds * 1000) : new Date(p.fecha || Date.now());
+    const fechaFmt = isNaN(rawFecha.getTime()) ? (p.fecha || '') : rawFecha.toLocaleDateString('es-CO', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+    });
+
+    const telLimpio = (p.cliente_telefono || '').replace(/[^0-9]/g, '');
+    const waUrl = telLimpio ? `https://wa.me/57${telLimpio.slice(-10)}?text=${encodeURIComponent('¡Hola ' + (p.cliente_nombre||'') + '! Te saludamos de Frescura Natural para confirmar tu pedido ' + (p.ref||'') + ' por valor de ' + fmt(p.total||0) + '.')}` : '#';
+
+    let estadoBadge = '';
+    const st = p.estado || 'pendiente_confirmacion';
+    if (st === 'pendiente_confirmacion') {
+      estadoBadge = '<span class="badge" style="background:#fff3cd;color:#856404;border:1px solid #ffeeba;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600">⏳ Pendiente</span>';
+    } else if (st === 'confirmado') {
+      estadoBadge = '<span class="badge" style="background:#d4edda;color:#155724;border:1px solid #c3e6cb;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600">✓ Confirmado</span>';
+    } else {
+      estadoBadge = '<span class="badge" style="background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600">✕ Cancelado</span>';
+    }
+
+    let accionesHTML = '';
+    if (st === 'pendiente_confirmacion') {
+      accionesHTML = `
+        <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
+          ${telLimpio ? `<a class="btn btn-secondary btn-sm" href="${waUrl}" target="_blank" title="Contactar por WhatsApp" style="color:#25d366;text-decoration:none;display:inline-flex;align-items:center;gap:4px">💬 WhatsApp</a>` : ''}
+          <button class="btn btn-primary btn-sm" onclick="confirmarPedidoWeb('${p.id}')">✓ Confirmar y Registrar</button>
+          <button class="btn btn-secondary btn-sm" style="color:#d9534f" onclick="cancelarPedidoWeb('${p.id}')" title="Rechazar pedido">✕</button>
+        </div>
+      `;
+    } else if (st === 'confirmado') {
+      accionesHTML = `
+        <div style="text-align:right">
+          <span style="color:#5a7a5c;font-size:12px;font-weight:600">✓ Venta #${p.venta_num || p.venta_id || p.ref || 'Registrada'}</span>
+        </div>
+      `;
+    } else {
+      accionesHTML = `<div style="text-align:right;color:var(--ink3);font-size:12px">Pedido descartado</div>`;
+    }
+
+    return `
+      <tr>
+        <td style="white-space:nowrap">
+          <strong style="color:var(--gold);font-family:'JetBrains Mono',monospace;font-size:12px">${p.ref || p.id.slice(0,8)}</strong>
+          <div style="font-size:11px;color:var(--ink3);margin-top:2px">${fechaFmt}</div>
+        </td>
+        <td>
+          <div style="font-weight:600">${p.cliente_nombre || 'Cliente Anónimo'}</div>
+          <div style="font-size:11px;color:var(--ink3)">${p.cliente_email || ''} ${p.cliente_telefono ? '· ' + p.cliente_telefono : ''}</div>
+        </td>
+        <td>
+          <div>${p.ciudad || 'No especificada'}</div>
+          <div style="font-size:11px;color:var(--ink3)">${p.direccion || ''}</div>
+        </td>
+        <td style="max-width:280px;font-size:12px">
+          ${p.items_resumen || 'Sin detalle de productos'}
+        </td>
+        <td>
+          <span style="font-size:11px;background:var(--bg2);padding:2px 6px;border-radius:3px">${p.medio_pago || 'Web'}</span>
+        </td>
+        <td style="text-align:right;white-space:nowrap">
+          <div style="font-weight:700;font-size:13px">${fmt(p.total || p.subtotal || 0)}</div>
+          ${Number(p.envio) > 0 ? `<div style="font-size:10px;color:var(--ink3)">Flete: ${fmt(p.envio)}</div>` : '<div style="font-size:10px;color:#5a7a5c">Envío Gratis</div>'}
+        </td>
+        <td style="text-align:center">${estadoBadge}</td>
+        <td>${accionesHTML}</td>
+      </tr>
+    `;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ref / Fecha</th>
+            <th>Cliente</th>
+            <th>Destino</th>
+            <th>Productos</th>
+            <th>Medio Pago</th>
+            <th style="text-align:right">Total</th>
+            <th style="text-align:center">Estado</th>
+            <th style="text-align:right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function confirmarPedidoWeb(pedidoId) {
+  const pedido = _pedidosWebCache.find(x => x.id === pedidoId);
+  if (!pedido) {
+    alert('Pedido no encontrado en caché');
+    return;
+  }
+
+  if (!confirm(`¿Confirmar pedido ${pedido.ref || ''} de ${pedido.cliente_nombre || 'Cliente'} por ${fmt(pedido.total||0)}?\n\nSe creará el registro de venta, se vinculará el cliente y se descontará del inventario.`)) {
+    return;
+  }
+
+  // 1. Vincular o crear cliente en DB.clientes
+  let cliente = null;
+  const telSearch = (pedido.cliente_telefono || '').replace(/[^0-9]/g, '').slice(-10);
+  if (telSearch) {
+    cliente = DB.clientes.find(c => (c.telefono || '').replace(/[^0-9]/g, '').slice(-10) === telSearch);
+  }
+  if (!cliente && pedido.cliente_nombre) {
+    cliente = DB.clientes.find(c => (c.nombre || '').trim().toLowerCase() === pedido.cliente_nombre.trim().toLowerCase());
+  }
+
+  let cid = cliente ? cliente.id : uid('CLI');
+  if (!cliente) {
+    cliente = {
+      id: cid,
+      nombre: pedido.cliente_nombre || 'Cliente Web',
+      telefono: pedido.cliente_telefono || '',
+      email: pedido.cliente_email || '',
+      ciudad: pedido.ciudad || '',
+      direccion: pedido.direccion || '',
+      canal: 'Web',
+      cashback: 0,
+      club_frescura: false,
+      fecha_primera: today(),
+      total_historico: 0
+    };
+    DB.clientes.push(cliente);
+    try { syncClienteToFirestore(cliente); } catch(e){}
+  } else {
+    if (pedido.ciudad && !cliente.ciudad) cliente.ciudad = pedido.ciudad;
+    if (pedido.direccion && !cliente.direccion) cliente.direccion = pedido.direccion;
+  }
+
+  // 2. Procesar ítems y descontar stock
+  let itemsRaw = [];
+  try {
+    if (pedido.items_json) itemsRaw = JSON.parse(pedido.items_json);
+  } catch(e){}
+
+  const ventaId = uid('VEN');
+  const ventaNum = pedido.ref || ('WEB-' + Date.now().toString().slice(-6));
+  let itemsDetalle = [];
+  let costoTotalVenta = 0;
+
+  if (itemsRaw.length > 0) {
+    itemsRaw.forEach(it => {
+      const prod = DB.productos.find(p => p.id === it.id || (p.nombre && it.name && p.nombre.trim().toLowerCase() === it.name.trim().toLowerCase()));
+      const pid = prod ? prod.id : (it.id || 'PROD-WEB');
+      const costo = prod ? (prod.costo || 0) : 0;
+      const qty = parseInt(it.qty) || 1;
+      const precioUnit = parseFloat(it.unitPrice) || parseFloat(it.price) || 0;
+
+      if (prod && prod.stock !== undefined) {
+        prod.stock = Math.max(0, prod.stock - qty);
+        DB.movimientos.push({
+          id: uid('MOV'),
+          fecha: today(),
+          id_producto: prod.id,
+          tipo: 'venta',
+          cantidad: -qty,
+          costo_unitario: costo,
+          referencia: ventaNum,
+          nota: 'Venta Tienda Web · ' + (pedido.cliente_nombre || '')
+        });
+        try { syncProductoToFirestore(prod); } catch(e){}
+      }
+
+      costoTotalVenta += costo * qty;
+      itemsDetalle.push({
+        id: uid('DET'),
+        id_venta: ventaId,
+        id_producto: pid,
+        cantidad: qty,
+        precio_unitario: precioUnit,
+        costo_unitario: costo,
+        subtotal: precioUnit * qty
+      });
+    });
+  }
+
+  // 3. Crear Venta en DB.ventas
+  const venta = {
+    id: ventaId,
+    num: ventaNum,
+    fecha: today(),
+    id_cliente: cid,
+    canal_venta: 'Web',
+    total_bruto: Number(pedido.subtotal) || Number(pedido.total) || 0,
+    descuento: 0,
+    costo_envio: Number(pedido.envio) || 0,
+    subtotal_productos: Number(pedido.subtotal) || Number(pedido.total) || 0,
+    costo_transporte: Number(pedido.envio) || 0,
+    transporte_pagado_por: Number(pedido.envio) > 0 ? 'Cliente' : '',
+    total_pagado: Number(pedido.total) || Number(pedido.subtotal) || 0,
+    metodo_pago: pedido.medio_pago || 'Web',
+    estado_pago: 'confirmado',
+    estado_envio: 'preparando',
+    cashback_generado: 0,
+    costo_productos: costoTotalVenta,
+    pedido_web_ref: pedido.ref || '',
+    pedido_web_id: pedidoId
+  };
+
+  DB.ventas.push(venta);
+  if (itemsDetalle.length > 0) {
+    DB.detalle_ventas.push(...itemsDetalle);
+  }
+  cliente.total_historico = (cliente.total_historico || 0) + venta.total_pagado;
+
+  await saveDB();
+  try { syncVentaToFirestore(venta); } catch(e){}
+
+  // 4. Actualizar estado en Firestore pedidos_web
+  try {
+    await _db.collection('pedidos_web').doc(pedidoId).update({
+      estado: 'confirmado',
+      procesado: true,
+      venta_id: ventaId,
+      venta_num: ventaNum,
+      fecha_confirmacion: new Date().toISOString()
+    });
+    pedido.estado = 'confirmado';
+    pedido.venta_num = ventaNum;
+  } catch(e) {
+    console.warn('[pedidos_web] update estado error:', e.message);
+  }
+
+  showAdminToast(`✓ Pedido ${ventaNum} confirmado y registrado en Ventas`);
+  await renderPedidosWeb();
+}
+
+async function cancelarPedidoWeb(pedidoId) {
+  const pedido = _pedidosWebCache.find(x => x.id === pedidoId);
+  if (!pedido) return;
+  if (!confirm(`¿Estás seguro de descartar/cancelar el pedido ${pedido.ref || ''} de ${pedido.cliente_nombre || ''}?`)) return;
+
+  try {
+    await _db.collection('pedidos_web').doc(pedidoId).update({
+      estado: 'cancelado',
+      procesado: false,
+      fecha_cancelacion: new Date().toISOString()
+    });
+    pedido.estado = 'cancelado';
+    showAdminToast(`Pedido ${pedido.ref || ''} cancelado`);
+    await renderPedidosWeb();
+  } catch(e) {
+    alert('Error al cancelar pedido: ' + e.message);
+  }
+}
+
+
 async function renderDistribuidores() {
   const el = document.getElementById('dist-admin-list');
   el.innerHTML = '<div class="card-body" style="color:var(--ink3);font-style:italic;padding:20px">Cargando...</div>';
@@ -5131,7 +5498,41 @@ async function initApp() {
   }
   document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});});
 
-  // ── Real-time listener: new distributor orders (notification only) ──
+
+  // ── Real-time listener: new web orders (tienda online) ──
+  _db.collection('pedidos_web').where('estado','==','pendiente_confirmacion').onSnapshot(snapshot => {
+    let hasNew = false;
+    let pendingCount = snapshot.size || 0;
+
+    if (pendingCount > 0) {
+      marcarNavDot('pedidos_web');
+    } else {
+      quitarNavDot('pedidos_web');
+    }
+
+    snapshot.docChanges().forEach(change => {
+      if (change.type !== 'added') return;
+      const pedido = {id: change.doc.id, ...change.doc.data()};
+      const shownKey = 'fn_notif_web_' + pedido.id;
+      if (localStorage.getItem(shownKey)) return;
+      localStorage.setItem(shownKey, '1');
+      hasNew = true;
+      const n = document.createElement('div');
+      n.style.cssText = 'position:fixed;top:80px;right:20px;background:#1e1c18;color:#f5f2ed;padding:14px 20px;border-radius:6px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);border-left:3px solid #5a7a5c;cursor:pointer;max-width:320px';
+      n.innerHTML = '🌐 Nuevo pedido web de <strong>' + (pedido.cliente_nombre || 'Cliente') + '</strong><br><span style="font-size:11px;color:#8a847a">' + (pedido.ref||'') + ' · ' + fmt(pedido.total||0) + ' · Clic para revisar</span>';
+      n.onclick = () => { nav('pedidos_web'); n.remove(); };
+      document.body.appendChild(n);
+      setTimeout(() => { if (n.parentNode) n.remove(); }, 8000);
+    });
+
+    if (hasNew) {
+      const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || '';
+      if (activePage === 'pedidos_web') renderPedidosWeb();
+    }
+  }, err => console.warn('[onSnapshot pedidos_web]', err.message));
+
+
+    // ── Real-time listener: new distributor orders (notification only) ──
   const PEDIDOS_COL = _db.collection('pedidos_dist');
   PEDIDOS_COL.where('procesado','==',false).onSnapshot(snapshot => {
     let hasNew = false;
