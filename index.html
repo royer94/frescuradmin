@@ -724,15 +724,15 @@ textarea{resize:vertical;min-height:80px}
 
 <!-- MODAL: PRODUCTO -->
 <div class="modal-overlay" id="modal-producto">
-  <div class="modal">
+  <div class="modal" style="max-width:760px">
     <div class="modal-header"><span class="modal-title" id="modal-producto-title">Nuevo Producto</span><button class="modal-close" onclick="closeModal('modal-producto')">✕</button></div>
-    <div class="modal-body">
+    <div class="modal-body" style="max-height:78vh;overflow-y:auto">
       <input type="hidden" id="p-id">
       <div class="form-row">
-        <div class="form-group"><label>Nombre *</label><input type="text" id="p-nombre"></div>
+        <div class="form-group"><label>Nombre *</label><input type="text" id="p-nombre" oninput="autoSlugProductoWeb()"></div>
         <div class="form-group">
-          <label>Categoría</label>
-          <select id="p-categoria" onchange="if(this.value==='__nueva__'){document.getElementById('p-categoria-nueva').style.display='block';document.getElementById('p-categoria-nueva').focus();}else{document.getElementById('p-categoria-nueva').style.display='none';}">
+          <label>Categoría ERP</label>
+          <select id="p-categoria" onchange="if(this.value==='__nueva__'){document.getElementById('p-categoria-nueva').style.display='block';document.getElementById('p-categoria-nueva').focus();}else{document.getElementById('p-categoria-nueva').style.display='none';syncCatErpToWeb();}">
             <option>Cuidado Labial</option><option>Desodorantes</option><option>Jabones</option><option>Packs</option><option>Serums</option><option>Otro</option>
             <option value="__nueva__">➕ Crear categoría nueva...</option>
           </select>
@@ -747,11 +747,138 @@ textarea{resize:vertical;min-height:80px}
         <div class="form-group"><label>Stock Actual</label><input type="number" id="p-stock"></div>
         <div class="form-group"><label>Stock Mínimo (alerta)</label><input type="number" id="p-stock-min"></div>
       </div>
-      <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <input type="checkbox" id="p-tiene-descuento" style="width:auto" onchange="calcMargenProd()">
         <label style="margin:0;cursor:pointer" for="p-tiene-descuento">Este producto tiene descuento preestablecido (excluir del cashback)</label>
       </div>
-      <div style="border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:16px">
+      <div style="border-radius:var(--r);padding:12px;font-size:13px;margin-bottom:16px" id="prod-margen-preview"></div>
+
+      <!-- SECCIÓN IA + PUBLICACIÓN EN TIENDA WEB -->
+      <div style="border:1.5px solid var(--sage);background:rgba(74,107,82,0.04);border-radius:var(--r);padding:16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:var(--sage)">🌐 Publicación en Tienda Web & Ficha Técnica IA</div>
+            <div style="font-size:11px;color:var(--ink3)">Publica este producto en el catálogo de la tienda y crea su página individual SEO automáticamente</div>
+          </div>
+          <div id="p-web-status-badge"></div>
+        </div>
+
+        <!-- Ingredientes + Botón IA -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:14px">
+          <div class="form-group" style="margin-bottom:8px">
+            <label style="display:flex;justify-content:space-between;align-items:center">
+              <span>🌿 Ingredientes destacados / Notas del producto (base para la IA)</span>
+              <span style="font-size:10px;color:var(--ink3);font-weight:400">Separados por coma</span>
+            </label>
+            <input type="text" id="p-web-ingredientes" placeholder="Ej: Manteca de karité, aceite esencial de lavanda, glicerina vegetal, vitamina E">
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--ink3)" id="p-ia-status">Escribe el nombre e ingredientes y deja que la IA redacte la descripción y la ficha técnica completa.</span>
+            <button type="button" class="btn btn-sm" id="btn-ia-ficha-prod" onclick="generarFichaProductoIA()" style="background:linear-gradient(135deg,#2d5a3d,#4a7c59);color:#fff;border:none;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">
+              ✨ Generar Descripción y Ficha Técnica con IA
+            </button>
+          </div>
+        </div>
+
+        <!-- Descripción comercial y resumen corto -->
+        <div class="form-group">
+          <label>Descripción comercial (Página del producto y ERP) *</label>
+          <textarea id="p-desc" rows="3" placeholder="Descripción detallada, beneficios sensoriales y botánicos del producto..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Resumen corto para tarjeta en Tienda (máx. 145 caracteres)</label>
+          <input type="text" id="p-web-resumen" maxlength="160" placeholder="Breve frase atractiva que se muestra debajo del título en el catálogo">
+        </div>
+
+        <!-- Fotografía y URL Slug -->
+        <div class="form-row" style="align-items:start">
+          <div class="form-group">
+            <label>📸 Fotografía del Producto (WebP automático)</label>
+            <input type="file" id="p-web-foto-file" accept="image/*" onchange="handleProductoWebFoto(event)" style="font-size:12px">
+            <input type="hidden" id="p-web-foto-base64">
+            <input type="hidden" id="p-web-foto-existing">
+            <div id="p-web-foto-preview-wrap" style="margin-top:8px;display:none;align-items:center;gap:10px">
+              <img id="p-web-foto-preview" src="" alt="Vista previa" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">
+              <div style="font-size:11px;color:var(--ink2)">
+                <div id="p-web-foto-info" style="font-weight:600;color:var(--sage)">Imagen lista</div>
+                <button type="button" class="btn btn-xs btn-secondary" style="margin-top:4px" onclick="clearProductoWebFoto()">Quitar foto nueva</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>🔗 URL de la página del producto (Slug)</label>
+            <input type="text" id="p-web-slug" placeholder="ej: jabon-artesanal-karite-100g" oninput="this.dataset.manual='1';updateSlugPreview()">
+            <div style="font-size:11px;color:var(--ink3);margin-top:4px;word-break:break-all">
+              Página: <strong style="color:var(--sage)" id="p-web-slug-preview">frescuranaturalcosmeticos.com/...</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tipo Web, Presentación y Categorías Web -->
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tipo de producto en Tienda</label>
+            <select id="p-web-tipo">
+              <option value="jabon">Jabón en barra (Artesanal)</option>
+              <option value="kit-jabones">Kit de Jabones (Kit x3)</option>
+              <option value="desodorante">Desodorante (Sin aluminio)</option>
+              <option value="balsamo">Bálsamo labial (100% Natural)</option>
+              <option value="serum-facial">Sérum facial (Fórmula botánica)</option>
+              <option value="serum-capilar">Sérum capilar (Capilar)</option>
+              <option value="crema">Crema hidratante (Hidratación)</option>
+              <option value="champu">Champú sólido (Sólido)</option>
+              <option value="pack">Pack / Kit regalo (Pack ahorro)</option>
+              <option value="accesorio">Accesorio eco (Eco)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Presentación / Contenido neto</label>
+            <input type="text" id="p-web-presentacion" placeholder="Ej: Barra 100 g · Envase 60 g · 30 mL">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Categorías donde aparecerá en la Tienda Web</label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 0">
+            <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer"><input type="checkbox" class="p-web-cat-chk" value="Facial" style="width:auto"> Facial</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer"><input type="checkbox" class="p-web-cat-chk" value="Corporal" checked style="width:auto"> Corporal</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer"><input type="checkbox" class="p-web-cat-chk" value="Capilar" style="width:auto"> Capilar</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer"><input type="checkbox" class="p-web-cat-chk" value="Kits y packs" style="width:auto"> Kits y packs</label>
+          </div>
+        </div>
+
+        <!-- Ficha Técnica para Acordeones de la Página del Producto -->
+        <div style="border-top:1px dashed var(--border);padding-top:12px;margin-top:8px">
+          <div style="font-weight:600;font-size:12px;color:var(--ink2);margin-bottom:8px">📋 Ficha Técnica (Acordeones "Detalles del producto" y "Modo de uso" en la web)</div>
+          <div class="form-row">
+            <div class="form-group"><label>Beneficio principal</label><input type="text" id="p-web-beneficio" placeholder="Ej: Hidratación profunda y suavidad natural"></div>
+            <div class="form-group"><label>Tipo de piel / cabello</label><input type="text" id="p-web-piel" placeholder="Ej: Todo tipo de piel, incluso sensible"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Zona de aplicación</label><input type="text" id="p-web-zona" placeholder="Ej: Rostro y cuerpo"></div>
+            <div class="form-group"><label>Libre de (Sellos limpios)</label><input type="text" id="p-web-libre-de" placeholder="Ej: Parabenos, sulfatos y químicos agresivos"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Modo de uso recomendado</label>
+            <textarea id="p-web-modo-uso" rows="2" placeholder="Ej: Aplicar sobre la piel húmeda masajeando suavemente con movimientos circulares y enjuagar con abundante agua."></textarea>
+          </div>
+        </div>
+
+        <!-- Variantes opcionales -->
+        <details style="margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--ink2)">🎛️ Variantes opcionales (Aromas, Tamaños o Sabores)</summary>
+          <div class="form-row" style="margin-top:10px">
+            <div class="form-group"><label>Nombre de la opción</label><input type="text" id="p-web-vlabel" placeholder="Ej: aroma, tamaño, sabor"></div>
+            <div class="form-group"><label>Opciones (separadas por coma)</label><input type="text" id="p-web-variants" placeholder="Ej: 30 mL, 50 mL"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:4px">
+            <label>Precios por variante en COP (opcional, separados por coma en el mismo orden)</label>
+            <input type="text" id="p-web-vprices" placeholder="Ej: 30500, 45900 (dejar vacío si todas cuestan igual)">
+          </div>
+        </details>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:8px">
         <div style="font-weight:600;font-size:13px;margin-bottom:10px">🏷️ Promoción para distribuidores</div>
         <div class="form-row">
           <div class="form-group"><label>Descuento (%)</label><input type="number" id="p-promo-pct" min="0" max="100" placeholder="Ej: 15" oninput="calcMargenProd()"></div>
@@ -764,10 +891,15 @@ textarea{resize:vertical;min-height:80px}
           Si defines un % y un rango de fechas, el producto aparecerá con el precio en promoción automáticamente para los distribuidores mientras la fecha de hoy esté dentro del rango. Deja el % vacío o en 0 para que no tenga promoción.
         </div>
       </div>
-      <div class="form-group"><label>Descripción</label><textarea id="p-desc"></textarea></div>
-      <div style="border-radius:var(--r);padding:12px;font-size:13px" id="prod-margen-preview"></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-producto')">Cancelar</button><button class="btn btn-primary" onclick="saveProducto()">Guardar</button></div>
+    <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div id="p-web-unpublish-wrap"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="closeModal('modal-producto')">Cancelar</button>
+        <button class="btn btn-secondary" id="btn-save-prod-erp" onclick="saveProducto(false)">Guardar solo en ERP</button>
+        <button class="btn btn-primary" id="btn-save-prod-web" onclick="saveProducto(true)" style="background:var(--sage);border-color:var(--sage)">🌐 Guardar y Publicar en Web</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2430,9 +2562,12 @@ function renderProductos() {
   if (_productosPage < 1) _productosPage = 1;
   const prodsPage = prods.slice((_productosPage-1)*PRODUCTOS_PAGE_SIZE, _productosPage*PRODUCTOS_PAGE_SIZE);
   document.getElementById('productos-table').innerHTML=prods.length===0?'<div class="empty"><div class="empty-icon">🧴</div><h3>Sin productos</h3></div>':`
-    <table><thead><tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Costo</th><th>Precio</th><th>Margen</th><th>Stock</th><th>Cashback</th><th>Promo</th><th></th></tr></thead><tbody>
+    <table><thead><tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Costo</th><th>Precio</th><th>Margen</th><th>Stock</th><th>Tienda Web</th><th>Promo</th><th></th></tr></thead><tbody>
     ${prodsPage.map(p=>{const m=p.precio>0?(p.precio-p.costo)/p.precio*100:0;
-    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td>${fmt(p.costo)}</td><td class="fw-600">${fmt(p.precio)}</td><td class="${m>=50?'color-sage':m>=35?'color-gold':'color-red'}">${m.toFixed(0)}%</td><td class="${p.stock<=p.stock_min?'color-red':'color-sage'} fw-600">${p.stock}</td><td>${p.tiene_descuento?'<span class="badge badge-gray" style="font-size:9px">Excluido</span>':'<span class="cashback-pill" style="font-size:9px">5%</span>'}</td><td>${productoEnPromoHoy(p)?`<span class="badge" style="font-size:9px;background:var(--gold-light);color:var(--gold)">🏷️ -${p.descuento_pct}%</span>`:(p.descuento_pct>0?`<span class="badge badge-gray" style="font-size:9px">Prog. ${p.promo_desde}</span>`:'')}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editProducto('${p.id}')">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteProducto('${p.id}')">🗑</button></div></td></tr>`;}).join('')}
+    const webBadge = p.web_publicado && p.web_slug
+      ? `<a href="https://www.frescuranaturalcosmeticos.com/${p.web_slug}/" target="_blank" rel="noopener" class="badge" style="font-size:10px;background:var(--sage-light);color:var(--sage);text-decoration:none" title="Ver página del producto en la web">🌐 Publicado ↗</a>`
+      : `<button class="btn btn-xs btn-secondary" style="font-size:10px;padding:2px 7px" onclick="editProducto('${p.id}')" title="Configurar y publicar en tienda web">🌐 Publicar</button>`;
+    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td>${fmt(p.costo)}</td><td class="fw-600">${fmt(p.precio)}</td><td class="${m>=50?'color-sage':m>=35?'color-gold':'color-red'}">${m.toFixed(0)}%</td><td class="${p.stock<=p.stock_min?'color-red':'color-sage'} fw-600">${p.stock}</td><td>${webBadge}</td><td>${productoEnPromoHoy(p)?`<span class="badge" style="font-size:9px;background:var(--gold-light);color:var(--gold)">🏷️ -${p.descuento_pct}%</span>`:(p.descuento_pct>0?`<span class="badge badge-gray" style="font-size:9px">Prog. ${p.promo_desde}</span>`:'')}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editProducto('${p.id}')" title="Editar y gestionar publicación web">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteProducto('${p.id}')">🗑</button></div></td></tr>`;}).join('')}
     </tbody></table>
     ${paginationControlsHTML(_productosPage, totalPagesP, 'goToProductosPage')}`;
 }
@@ -2452,6 +2587,7 @@ function editProducto(id){
   document.getElementById('p-promo-pct').value=p.descuento_pct||'';
   document.getElementById('p-promo-desde').value=p.promo_desde||'';
   document.getElementById('p-promo-hasta').value=p.promo_hasta||'';
+  populateWebFieldsModal(p);
   calcMargenProd();openModal('modal-producto');
 }
 function deleteProducto(id){if(!confirm('¿Eliminar?'))return;DB.productos=DB.productos.filter(p=>p.id!==id);saveDB();renderProductos();}
@@ -3117,6 +3253,7 @@ function openModalProducto(){
   document.getElementById('p-tiene-descuento').checked=false;
   document.getElementById('prod-margen-preview').innerHTML='';
   poblarSelectCategoriaProducto('');
+  populateWebFieldsModal(null);
   openModal('modal-producto');
 }
 
@@ -3139,7 +3276,310 @@ function calcMargenProd(){
   } else { prev.innerHTML=''; }
 }
 
-function saveProducto(){
+const FN_WEB_PUBLISH_URL = 'https://www.frescuranaturalcosmeticos.com/api/publicar_producto.php';
+const FN_WEB_PUBLISH_TOKEN = 'FN-ERP-PUBLISH-2026';
+
+function slugifyTexto(str){
+  return String(str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+
+function autoSlugProductoWeb(){
+  const slugInput = document.getElementById('p-web-slug');
+  if(!slugInput) return;
+  if(slugInput.dataset.manual === '1' && slugInput.value.trim() !== '') {
+    updateSlugPreview();
+    return;
+  }
+  const nombre = document.getElementById('p-nombre')?.value || '';
+  slugInput.value = slugifyTexto(nombre);
+  updateSlugPreview();
+}
+
+function updateSlugPreview(){
+  const slug = slugifyTexto(document.getElementById('p-web-slug')?.value || document.getElementById('p-nombre')?.value || 'nuevo-producto');
+  const prev = document.getElementById('p-web-slug-preview');
+  if(prev) prev.textContent = 'frescuranaturalcosmeticos.com/' + (slug || '...') + '/';
+}
+
+function syncCatErpToWeb(){
+  const catErp = document.getElementById('p-categoria')?.value || '';
+  const tipoSel = document.getElementById('p-web-tipo');
+  const mapTipo = {
+    'Cuidado Labial': {tipo:'balsamo', cats:['Facial']},
+    'Desodorantes': {tipo:'desodorante', cats:['Corporal']},
+    'Jabones': {tipo:'jabon', cats:['Corporal']},
+    'Packs': {tipo:'pack', cats:['Kits y packs']},
+    'Serums': {tipo:'serum-facial', cats:['Facial']}
+  };
+  if(mapTipo[catErp]){
+    if(tipoSel) tipoSel.value = mapTipo[catErp].tipo;
+    document.querySelectorAll('.p-web-cat-chk').forEach(chk => {
+      chk.checked = mapTipo[catErp].cats.includes(chk.value);
+    });
+  }
+}
+
+function handleProductoWebFoto(ev){
+  const file = ev.target.files?.[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      const MAX = 900;
+      let w = img.width, h = img.height;
+      if(w > MAX || h > MAX){
+        if(w > h){ h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FAF6F0';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      let dataUrl = canvas.toDataURL('image/webp', 0.86);
+      if(!dataUrl.startsWith('data:image/webp')) dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+      document.getElementById('p-web-foto-base64').value = dataUrl;
+      const prevImg = document.getElementById('p-web-foto-preview');
+      const wrap = document.getElementById('p-web-foto-preview-wrap');
+      const info = document.getElementById('p-web-foto-info');
+      if(prevImg) prevImg.src = dataUrl;
+      if(wrap) wrap.style.display = 'flex';
+      if(info) info.textContent = `Lista para subir (${w}×${h}px · ${Math.round(dataUrl.length*0.75/1024)} KB)`;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearProductoWebFoto(){
+  document.getElementById('p-web-foto-file').value = '';
+  document.getElementById('p-web-foto-base64').value = '';
+  const existing = document.getElementById('p-web-foto-existing').value;
+  const wrap = document.getElementById('p-web-foto-preview-wrap');
+  if(existing){
+    document.getElementById('p-web-foto-preview').src = 'https://www.frescuranaturalcosmeticos.com/' + existing.replace(/^\/+/, '');
+    document.getElementById('p-web-foto-info').textContent = 'Imagen actual en la web';
+    wrap.style.display = 'flex';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+function populateWebFieldsModal(p){
+  const fields = ['p-web-ingredientes','p-web-resumen','p-web-slug','p-web-presentacion','p-web-beneficio','p-web-piel','p-web-zona','p-web-libre-de','p-web-modo-uso','p-web-vlabel','p-web-variants','p-web-vprices','p-web-foto-base64','p-web-foto-existing'];
+  fields.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const fileEl = document.getElementById('p-web-foto-file');
+  if(fileEl) fileEl.value = '';
+  const slugEl = document.getElementById('p-web-slug');
+  if(slugEl) slugEl.dataset.manual = p?.web_slug ? '1' : '0';
+
+  if(p){
+    document.getElementById('p-web-ingredientes').value = p.web_ingredientes || '';
+    document.getElementById('p-web-resumen').value = p.web_resumen || '';
+    document.getElementById('p-web-slug').value = p.web_slug || slugifyTexto(p.nombre || '');
+    document.getElementById('p-web-tipo').value = p.web_tipo || 'jabon';
+    document.getElementById('p-web-presentacion').value = p.web_presentacion || '';
+    document.getElementById('p-web-beneficio').value = p.web_beneficio || '';
+    document.getElementById('p-web-piel').value = p.web_piel || '';
+    document.getElementById('p-web-zona').value = p.web_zona || '';
+    document.getElementById('p-web-libre-de').value = p.web_libre_de || 'Parabenos, sulfatos y químicos agresivos';
+    document.getElementById('p-web-modo-uso').value = p.web_modo_uso || '';
+    document.getElementById('p-web-vlabel').value = p.web_vlabel || '';
+    document.getElementById('p-web-variants').value = Array.isArray(p.web_variants) ? p.web_variants.join(', ') : (p.web_variants || '');
+    document.getElementById('p-web-vprices').value = Array.isArray(p.web_vprices) ? p.web_vprices.join(', ') : (p.web_vprices || '');
+    document.getElementById('p-web-foto-existing').value = p.web_img || '';
+
+    const cats = Array.isArray(p.web_cats) && p.web_cats.length ? p.web_cats : ['Corporal'];
+    document.querySelectorAll('.p-web-cat-chk').forEach(chk => { chk.checked = cats.includes(chk.value); });
+
+    const wrap = document.getElementById('p-web-foto-preview-wrap');
+    if(p.web_img){
+      document.getElementById('p-web-foto-preview').src = 'https://www.frescuranaturalcosmeticos.com/' + p.web_img.replace(/^\/+/, '') + '?t=' + Date.now();
+      document.getElementById('p-web-foto-info').textContent = 'Imagen actual publicada';
+      wrap.style.display = 'flex';
+    } else {
+      wrap.style.display = 'none';
+    }
+
+    const badge = document.getElementById('p-web-status-badge');
+    const unpub = document.getElementById('p-web-unpublish-wrap');
+    if(p.web_publicado && p.web_slug){
+      badge.innerHTML = `<a href="https://www.frescuranaturalcosmeticos.com/${p.web_slug}/" target="_blank" rel="noopener" class="badge" style="background:var(--sage-light);color:var(--sage);text-decoration:none;font-size:11px">✅ Publicado en Web ↗</a>`;
+      unpub.innerHTML = `<button type="button" class="btn btn-xs btn-danger" onclick="despublicarProductoDeWeb('${p.id}')">🚫 Retirar de la Tienda Web</button>`;
+    } else {
+      badge.innerHTML = `<span class="badge badge-gray" style="font-size:11px">No publicado aún</span>`;
+      unpub.innerHTML = '';
+    }
+  } else {
+    document.getElementById('p-web-libre-de').value = 'Parabenos, sulfatos y químicos agresivos';
+    document.getElementById('p-web-foto-preview-wrap').style.display = 'none';
+    document.getElementById('p-web-status-badge').innerHTML = '<span class="badge badge-gray" style="font-size:11px">Nuevo producto</span>';
+    document.getElementById('p-web-unpublish-wrap').innerHTML = '';
+    syncCatErpToWeb();
+  }
+  updateSlugPreview();
+}
+
+async function generarFichaProductoIA(){
+  const nombre = document.getElementById('p-nombre')?.value.trim() || '';
+  const ingredientes = document.getElementById('p-web-ingredientes')?.value.trim() || '';
+  const categoria = document.getElementById('p-categoria')?.value || 'Jabones';
+  const precio = document.getElementById('p-precio')?.value || '';
+
+  if(!nombre){
+    alert('Por favor escribe primero el Nombre del producto para que la IA pueda generar la descripción y la ficha técnica.');
+    document.getElementById('p-nombre')?.focus();
+    return;
+  }
+
+  const btn = document.getElementById('btn-ia-ficha-prod');
+  const statusEl = document.getElementById('p-ia-status');
+  const oldText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Generando con IA...';
+  if(statusEl) statusEl.textContent = 'Analizando nombre e ingredientes botánicos...';
+
+  const applyGeneratedData = (res) => {
+    if(res.descripcion) document.getElementById('p-desc').value = res.descripcion;
+    if(res.resumen_corto) document.getElementById('p-web-resumen').value = String(res.resumen_corto).slice(0, 155);
+    if(res.presentacion) document.getElementById('p-web-presentacion').value = res.presentacion;
+    if(res.tipo_web) {
+      const sel = document.getElementById('p-web-tipo');
+      if(sel && [...sel.options].some(o => o.value === res.tipo_web)) sel.value = res.tipo_web;
+    }
+    if(Array.isArray(res.categorias_web) && res.categorias_web.length){
+      document.querySelectorAll('.p-web-cat-chk').forEach(chk => {
+        chk.checked = res.categorias_web.includes(chk.value);
+      });
+    }
+    if(res.beneficio) document.getElementById('p-web-beneficio').value = res.beneficio;
+    if(res.tipo_piel) document.getElementById('p-web-piel').value = res.tipo_piel;
+    if(res.zona_uso) document.getElementById('p-web-zona').value = res.zona_uso;
+    if(res.modo_uso) document.getElementById('p-web-modo-uso').value = res.modo_uso;
+    if(res.libre_de) document.getElementById('p-web-libre-de').value = res.libre_de;
+    if(res.ingredientes_limpios && !ingredientes) document.getElementById('p-web-ingredientes').value = res.ingredientes_limpios;
+    if(res.slug && document.getElementById('p-web-slug').dataset.manual !== '1'){
+      document.getElementById('p-web-slug').value = slugifyTexto(res.slug);
+      updateSlugPreview();
+    } else {
+      autoSlugProductoWeb();
+    }
+  };
+
+  // Fallback botánico inteligente por si no hay API key o falla la conexión
+  const buildLocalFallback = () => {
+    const nLow = nombre.toLowerCase();
+    const ingStr = ingredientes || 'extractos botánicos, aceites vegetales puros y vitamina E';
+    let tipo = 'jabon', cats = ['Corporal'], pres = 'Barra 100 g', zona = 'Rostro y cuerpo', piel = 'Todo tipo de piel, incluso piel sensible';
+    let modo = 'Aplicar sobre la piel húmeda frotando suavemente hasta obtener una espuma cremosa. Masajear con movimientos circulares y enjuagar con abundante agua.';
+    let ben = 'Limpieza suave, nutrición botánica e hidratación sin resecar';
+
+    if(nLow.includes('serum') || nLow.includes('sérum') || categoria === 'Serums'){
+      if(nLow.includes('capilar') || nLow.includes('cabello')){
+        tipo = 'serum-capilar'; cats = ['Capilar']; pres = '30 mL'; zona = 'Cabello y cuero cabelludo'; piel = 'Todo tipo de cabello';
+        modo = 'Aplicar de 3 a 5 gotas en la palma de la mano y distribuir en el cuero cabelludo o de medios a puntas con un suave masaje.';
+        ben = 'Fortalecimiento capilar, nutrición profunda y brillo natural';
+      } else {
+        tipo = 'serum-facial'; cats = ['Facial']; pres = '30 mL'; zona = 'Rostro y cuello'; piel = 'Todo tipo de piel';
+        modo = 'Aplicar de 3 a 4 gotas sobre la piel limpia y seca del rostro y cuello, masajeando con suaves toques ascendentes hasta su completa absorción.';
+        ben = 'Hidratación intensiva, luminosidad y cuidado antioxidante';
+      }
+    } else if(nLow.includes('desodorante') || categoria === 'Desodorantes'){
+      tipo = 'desodorante'; cats = ['Corporal']; pres = 'Envase 60 g'; zona = 'Axilas';
+      modo = 'Aplicar una pequeña cantidad sobre las axilas limpias y secas y extender suavemente hasta su absorción.';
+      ben = 'Protección natural duradera frente al mal olor sin obstruir los poros';
+    } else if(nLow.includes('balsamo') || nLow.includes('bálsamo') || nLow.includes('labial') || categoria === 'Cuidado Labial'){
+      tipo = 'balsamo'; cats = ['Facial']; pres = '4,2 g'; zona = 'Labios';
+      modo = 'Deslizar suavemente sobre los labios tantas veces como sea necesario a lo largo del día para mantenerlos hidratados y protegidos.';
+      ben = 'Hidratación inmediata, reparación y suavidad labial';
+    } else if(nLow.includes('champu') || nLow.includes('champú')){
+      tipo = 'champu'; cats = ['Capilar']; pres = 'Barra 50 g'; zona = 'Cabello y cuero cabelludo'; piel = 'Todo tipo de cabello';
+      modo = 'Humedecer el cabello y frotar la barra directamente o entre las manos hasta crear espuma. Masajear el cuero cabelludo y aclarar con agua.';
+      ben = 'Limpieza capilar consciente, suavidad y vitalidad desde la raíz';
+    } else if(nLow.includes('crema')){
+      tipo = 'crema'; cats = ['Facial']; pres = '50 g'; zona = 'Rostro, cuello y manos';
+      modo = 'Aplicar diariamente sobre la piel limpia realizando suaves masajes circulares hasta su total absorción.';
+      ben = 'Hidratación profunda, protección de la barrera cutánea y textura sedosa';
+    } else if(nLow.includes('kit') && nLow.includes('jabon')){
+      tipo = 'kit-jabones'; cats = ['Corporal']; pres = 'Kit x 3 barras (100 g c/u)';
+    } else if(nLow.includes('kit') || nLow.includes('pack') || nLow.includes('combo') || categoria === 'Packs'){
+      tipo = 'pack'; cats = ['Kits y packs']; pres = 'Kit completo';
+      modo = 'Disfruta cada producto del ritual siguiendo su orden de limpieza, hidratación y protección diaria.';
+      ben = 'Rutina integral de bienestar y cuidado botánico artesanal';
+    }
+
+    const pesoMatch = nombre.match(/(\d+\s*(?:g|gr|gramos|ml|mL)(?:\s*x\s*\d+)?)/i);
+    if(pesoMatch) pres = pesoMatch[1];
+
+    return {
+      descripcion: `Descubre ${nombre} de Frescura Natural, elaborado artesanalmente en Colombia con ${ingStr}. Su fórmula botánica de origen natural cuida, nutre y respeta el equilibrio de tu piel sin químicos agresivos, transformando tu rutina diaria en un ritual de bienestar consciente.`,
+      resumen_corto: `Fórmula artesanal con ${ingStr}. Cuidado 100% natural libre de químicos agresivos.`.slice(0, 145),
+      presentacion: pres,
+      tipo_web: tipo,
+      categorias_web: cats,
+      beneficio: ben,
+      tipo_piel: piel,
+      zona_uso: zona,
+      modo_uso: modo,
+      libre_de: 'Parabenos, sulfatos, siliconas y conservantes sintéticos',
+      slug: slugifyTexto(nombre)
+    };
+  };
+
+  try {
+    if(!GEMINI_API_KEY){
+      const localData = buildLocalFallback();
+      applyGeneratedData(localData);
+      if(statusEl) statusEl.innerHTML = '<span style="color:var(--sage);font-weight:600">✨ Ficha generada con motor botánico local (configura tu API Key de Groq para redacción IA avanzada).</span>';
+      return;
+    }
+
+    const sysPrompt = `Eres el redactor experto en cosmética botánica artesanal y SEO de "Frescura Natural Cosméticos" (Colombia).
+Tu tarea es generar la descripción persuasiva y la ficha técnica completa de un producto para publicarlo en https://www.frescuranaturalcosmeticos.com.
+Responde ÚNICAMENTE con un objeto JSON válido (sin bloques markdown ni texto adicional) con exactamente estas claves:
+{
+  "descripcion": "Párrafo comercial persuasivo, cálido y sensorial de 45 a 75 palabras destacando los beneficios de sus ingredientes en la piel/cabello y que es elaborado artesanalmente en Colombia sin químicos agresivos.",
+  "resumen_corto": "Frase atractiva de máximo 135 caracteres para la tarjeta del catálogo.",
+  "presentacion": "Ej: Barra 100 g, Kit 3 x 100 g, Envase 60 g, Frasco 30 mL",
+  "tipo_web": "Uno de: jabon | kit-jabones | desodorante | balsamo | serum-facial | serum-capilar | crema | champu | pack | accesorio",
+  "categorias_web": ["Una o dos de: Facial, Corporal, Capilar, Kits y packs"],
+  "beneficio": "Beneficio principal claro y conciso (ej. Hidratación profunda, acción calmante y regeneración cutánea)",
+  "tipo_piel": "Para qué tipo de piel o cabello está recomendado",
+  "zona_uso": "Zona de aplicación (ej. Rostro y cuerpo, Axilas, Labios, Cuero cabelludo)",
+  "modo_uso": "Instrucciones claras de aplicación en 1 o 2 frases",
+  "libre_de": "Ej: Parabenos, sulfatos, aluminio y conservantes sintéticos",
+  "ingredientes_limpios": "Lista de ingredientes bien formateada separados por coma",
+  "slug": "url-amigable-seo-en-minusculas-con-guiones"
+}`;
+
+    const userMsg = `Nombre del producto: ${nombre}
+Categoría ERP: ${categoria}
+Precio COP: ${precio || 'No especificado'}
+Ingredientes / Notas: ${ingredientes || 'Inferir ingredientes botánicos naturales apropiados según el nombre del producto'}`;
+
+    const raw = await callGemini(sysPrompt, [{parts:[{text: userMsg}]}]);
+    const jsonMatch = String(raw || '').match(/\{[\s\S]*\}/);
+    if(jsonMatch){
+      const parsed = JSON.parse(jsonMatch[0]);
+      applyGeneratedData(parsed);
+      if(statusEl) statusEl.innerHTML = '<span style="color:var(--sage);font-weight:600">✨ ¡Descripción y ficha técnica generadas con IA exitosamente! Revisa los campos antes de publicar.</span>';
+    } else {
+      throw new Error('Formato no JSON');
+    }
+  } catch(err) {
+    console.warn('Fallback IA:', err);
+    const localData = buildLocalFallback();
+    applyGeneratedData(localData);
+    if(statusEl) statusEl.innerHTML = '<span style="color:var(--sage);font-weight:600">✨ Ficha completada automáticamente (modo botánico inteligente).</span>';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldText;
+  }
+}
+
+async function saveProducto(publishToWeb = false){
   const nombre=document.getElementById('p-nombre').value.trim();
   const costo=parseFloat(document.getElementById('p-costo').value)||0;
   const precio=parseFloat(document.getElementById('p-precio').value)||0;
@@ -3155,16 +3595,141 @@ function saveProducto(){
   if(promoPct>0 && promoPct<=100 && (!promoDesde||!promoHasta)){alert('Si defines un % de descuento, debes indicar la fecha de inicio y fin de la promoción');return;}
   if(promoPct>100||promoPct<0){alert('El % de descuento debe estar entre 0 y 100');return;}
   if(promoDesde&&promoHasta&&promoDesde>promoHasta){alert('La fecha "Vigente desde" no puede ser posterior a "Vigente hasta"');return;}
+
+  const selectedWebCats = [...document.querySelectorAll('.p-web-cat-chk:checked')].map(c => c.value);
+  const webCats = selectedWebCats.length ? selectedWebCats : ['Corporal'];
+  const webSlug = slugifyTexto(document.getElementById('p-web-slug')?.value || nombre);
+  const webVariants = (document.getElementById('p-web-variants')?.value || '').split(',').map(s=>s.trim()).filter(Boolean);
+  const webVprices = (document.getElementById('p-web-vprices')?.value || '').split(',').map(s=>parseInt(s.replace(/[^\d]/g,''),10)).filter(n=>!isNaN(n) && n>0);
+
   const existingId=document.getElementById('p-id').value;
-  const data={nombre,categoria,costo,precio,stock:parseInt(document.getElementById('p-stock').value)||0,stock_min:parseInt(document.getElementById('p-stock-min').value)||5,desc:document.getElementById('p-desc').value,tiene_descuento:document.getElementById('p-tiene-descuento').checked,descuento_pct:promoPct,promo_desde:promoDesde,promo_hasta:promoHasta,activo:true};
-  if(existingId){const p=getProducto(existingId);if(p)Object.assign(p,data);}
-  else{
+  let targetId = existingId;
+  if(!targetId){
     const catPrefix={'Cuidado Labial':'BAL','Desodorantes':'DES','Jabones':'JAB','Packs':'PAC','Serums':'SER','Sérum':'SER','Otro':'PRD'};
-    const prefix=catPrefix[data.categoria]||'PRD';
+    const prefix=catPrefix[categoria]||'PRD';
     const count=DB.productos.filter(p=>p.id.startsWith(prefix)).length+1;
-    DB.productos.push({id:`${prefix}-${String(count).padStart(3,'0')}`, ...data});
+    targetId = `${prefix}-${String(count).padStart(3,'0')}`;
   }
+
+  const existingProd = existingId ? getProducto(existingId) : null;
+  const data={
+    nombre,categoria,costo,precio,
+    stock:parseInt(document.getElementById('p-stock').value)||0,
+    stock_min:parseInt(document.getElementById('p-stock-min').value)||5,
+    desc:document.getElementById('p-desc').value.trim(),
+    tiene_descuento:document.getElementById('p-tiene-descuento').checked,
+    descuento_pct:promoPct,promo_desde:promoDesde,promo_hasta:promoHasta,activo:true,
+    web_ingredientes: document.getElementById('p-web-ingredientes')?.value.trim() || '',
+    web_resumen: document.getElementById('p-web-resumen')?.value.trim() || '',
+    web_slug: webSlug,
+    web_tipo: document.getElementById('p-web-tipo')?.value || 'jabon',
+    web_presentacion: document.getElementById('p-web-presentacion')?.value.trim() || 'Artesanal',
+    web_cats: webCats,
+    web_beneficio: document.getElementById('p-web-beneficio')?.value.trim() || '',
+    web_piel: document.getElementById('p-web-piel')?.value.trim() || '',
+    web_zona: document.getElementById('p-web-zona')?.value.trim() || '',
+    web_libre_de: document.getElementById('p-web-libre-de')?.value.trim() || 'Parabenos, sulfatos y químicos agresivos',
+    web_modo_uso: document.getElementById('p-web-modo-uso')?.value.trim() || '',
+    web_vlabel: document.getElementById('p-web-vlabel')?.value.trim() || '',
+    web_variants: webVariants,
+    web_vprices: webVprices,
+    web_img: document.getElementById('p-web-foto-existing')?.value || existingProd?.web_img || '',
+    web_publicado: existingProd?.web_publicado || false
+  };
+
+  let prodRef;
+  if(existingProd){
+    Object.assign(existingProd, data);
+    prodRef = existingProd;
+  } else {
+    prodRef = {id: targetId, ...data};
+    DB.productos.push(prodRef);
+  }
+
+  if(publishToWeb){
+    const btnWeb = document.getElementById('btn-save-prod-web');
+    const oldBtnTxt = btnWeb ? btnWeb.innerHTML : '';
+    if(btnWeb){ btnWeb.disabled = true; btnWeb.innerHTML = '⏳ Publicando en Web...'; }
+    try {
+      const fotoBase64 = document.getElementById('p-web-foto-base64')?.value || '';
+      const payload = {
+        token: FN_WEB_PUBLISH_TOKEN,
+        action: 'publish',
+        id: prodRef.id,
+        name: prodRef.nombre,
+        price: prodRef.precio,
+        slug: prodRef.web_slug,
+        type: prodRef.web_tipo,
+        cats: prodRef.web_cats,
+        presentation: prodRef.web_presentacion,
+        description: prodRef.desc || `${prodRef.nombre} elaborado artesanalmente con ingredientes de origen natural.`,
+        short_description: prodRef.web_resumen,
+        ingredientes: prodRef.web_ingredientes,
+        beneficio: prodRef.web_beneficio,
+        tipo_piel: prodRef.web_piel,
+        zona_uso: prodRef.web_zona,
+        modo_uso: prodRef.web_modo_uso,
+        libre_de: prodRef.web_libre_de,
+        vlabel: prodRef.web_vlabel,
+        variants: prodRef.web_variants,
+        vprices: prodRef.web_vprices,
+        existing_img: prodRef.web_img,
+        image_base64: fotoBase64
+      };
+      const resp = await fetch(FN_WEB_PUBLISH_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const resJson = await resp.json();
+      if(!resp.ok || !resJson.success){
+        throw new Error(resJson.error || 'Error HTTP ' + resp.status);
+      }
+      prodRef.web_publicado = true;
+      if(resJson.product?.slug) prodRef.web_slug = resJson.product.slug;
+      if(resJson.product?.img) prodRef.web_img = resJson.product.img;
+      saveDB();
+      closeModal('modal-producto');
+      renderProductos();
+      alert(`✅ ¡Producto publicado exitosamente en la tienda web!\n\n🔗 Página creada: ${resJson.page_url}\n🛒 Catálogo actualizado: ${resJson.tienda_url}`);
+    } catch(err) {
+      saveDB();
+      renderProductos();
+      alert('⚠️ El producto se guardó en el ERP, pero no se pudo conectar con el servidor web para publicarlo:\n' + err.message + '\n\nAsegúrate de haber subido el archivo api/publicar_producto.php a tu Hostinger.');
+    } finally {
+      if(btnWeb){ btnWeb.disabled = false; btnWeb.innerHTML = oldBtnTxt; }
+    }
+    return;
+  }
+
   saveDB();closeModal('modal-producto');renderProductos();
+}
+
+async function despublicarProductoDeWeb(id){
+  const p = getProducto(id);
+  if(!p) return;
+  if(!confirm(`¿Retirar "${p.nombre}" del catálogo de la tienda web y eliminar su página pública?`)) return;
+  try {
+    const resp = await fetch(FN_WEB_PUBLISH_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        token: FN_WEB_PUBLISH_TOKEN,
+        action: 'unpublish',
+        id: p.id,
+        slug: p.web_slug || ''
+      })
+    });
+    const resJson = await resp.json();
+    if(!resp.ok || !resJson.success) throw new Error(resJson.error || 'Error al despublicar');
+    p.web_publicado = false;
+    saveDB();
+    closeModal('modal-producto');
+    renderProductos();
+    alert('✅ Producto retirado de la tienda web correctamente.');
+  } catch(err) {
+    alert('⚠️ No se pudo retirar de la tienda web: ' + err.message);
+  }
 }
 
 // ── Un producto está "en promo" hoy si tiene % > 0 y la fecha actual cae dentro del rango ──
