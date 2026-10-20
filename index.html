@@ -1168,16 +1168,23 @@ async function autoMigrateToCollections(source) {
 }
 
 // ── Carga de Base de Datos (Sincronización en la Nube con Firestore) ──
+let _isSavingDB = false;
+let _lastCloudSync = 0;
+
 async function loadDB() {
+  if (_isSavingDB) return;
   document.getElementById('page-title').textContent = 'Cargando datos...';
   try {
     let cloudData = null;
+    let cloudDocUpdated = 0;
 
     // 1) Leer siempre de admin/db primero (fuente unificada para Desktop y Móvil)
     try {
       const snapLegacy = await _DOC_LEGACY.get();
       if (snapLegacy.exists && snapLegacy.data()?.data) {
-        cloudData = JSON.parse(snapLegacy.data().data);
+        const rawDoc = snapLegacy.data();
+        cloudData = JSON.parse(rawDoc.data);
+        cloudDocUpdated = Number(rawDoc.updated || cloudData._updated || 0);
         console.log('[Firebase] Datos cargados con éxito desde Firestore (admin/db) ✓');
       }
     } catch(eLegacy) {
@@ -1218,18 +1225,58 @@ async function loadDB() {
       }
     }
 
+    const localRaw = localStorage.getItem('frescura_db');
+    let localData = null;
+    try { if (localRaw) localData = JSON.parse(localRaw); } catch(e){}
+
     if (cloudData) {
-      _applyDB(cloudData);
-      localStorage.setItem('frescura_db', JSON.stringify(DB));
-      localStorage.setItem('frescura_db_version', DB_VERSION);
-      // Mantener sincronizadas las colecciones modulares en segundo plano
-      autoMigrateToCollections(DB).catch(() => {});
+      const localUpdated = Number(localStorage.getItem('frescura_db_updated') || (localData && localData._updated) || 0);
+      const cloudUpdated = Number(cloudDocUpdated || cloudData._updated || cloudData.updated || 0);
+
+      // Si los datos locales tienen más ventas o son más recientes, preservar los cambios locales
+      // y sincronizarlos hacia la nube para no perder ventas recién confirmadas.
+      if (localData && (localData.ventas?.length > (cloudData.ventas?.length || 0) || (localUpdated > cloudUpdated))) {
+        console.log('[Firebase] Datos locales más recientes que la nube, preservando cambios locales.');
+        _applyDB(localData);
+        _DOC_LEGACY.set({ data: JSON.stringify(DB), version: DB_VERSION, updated: localUpdated || Date.now() }).catch(() => {});
+      } else {
+        // Asegurar que cualquier venta web confirmada localmente no se pierda si la nube aún no la tenía
+        if (localData && Array.isArray(localData.ventas)) {
+          const cloudVentaIds = new Set((cloudData.ventas || []).map(v => v.id));
+          const cloudWebRefs = new Set((cloudData.ventas || []).map(v => v.pedido_web_ref).filter(Boolean));
+          let mergedAny = false;
+          localData.ventas.forEach(lv => {
+            if (!cloudVentaIds.has(lv.id) && (!lv.pedido_web_ref || !cloudWebRefs.has(lv.pedido_web_ref))) {
+              cloudData.ventas = cloudData.ventas || [];
+              cloudData.ventas.push(lv);
+              mergedAny = true;
+            }
+          });
+          if (mergedAny && Array.isArray(localData.clientes)) {
+            const cloudCliIds = new Set((cloudData.clientes || []).map(c => c.id));
+            localData.clientes.forEach(lc => {
+              if (!cloudCliIds.has(lc.id)) {
+                cloudData.clientes = cloudData.clientes || [];
+                cloudData.clientes.push(lc);
+              }
+            });
+          }
+        }
+        _applyDB(cloudData);
+        localStorage.setItem('frescura_db', JSON.stringify(DB));
+        localStorage.setItem('frescura_db_version', DB_VERSION);
+        localStorage.setItem('frescura_db_updated', String(cloudUpdated || Date.now()));
+        if (!localStorage.getItem('fn_collections_migrated_v2')) {
+          localStorage.setItem('fn_collections_migrated_v2', '1');
+          autoMigrateToCollections(DB).catch(() => {});
+        }
+      }
     } else {
       // Si no hay datos en la nube, usar respaldo offline
-      const local = localStorage.getItem('frescura_db');
-      if (local) { _applyDB(JSON.parse(local)); }
+      if (localData) { _applyDB(localData); }
       else { _applyDB(JSON.parse(JSON.stringify(BACKUP_DATA))); }
     }
+    _lastCloudSync = Date.now();
   } catch(e) {
     console.warn('[Firebase] loadDB error, usando respaldo offline:', e.message);
     try {
@@ -1244,6 +1291,7 @@ async function loadDB() {
 
 // Recarga manual y automática de datos desde la nube (ideal para WebApp / PWA móvil)
 async function recargarDatosNube(silent=false) {
+  if (_isSavingDB) return;
   const btn = document.getElementById('btn-sync-cloud');
   if (btn) btn.style.transform = 'rotate(180deg)';
   try {
@@ -1259,14 +1307,9 @@ async function recargarDatosNube(silent=false) {
   }
 }
 
-// Actualización automática al volver a la pestaña o WebApp móvil
+// Actualización automática al volver a la pestaña (con enfriamiento de 60s para no saturar cuota ni interferir con diálogos)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && _currentRole === 'admin') {
-    recargarDatosNube(true);
-  }
-});
-window.addEventListener('focus', () => {
-  if (_currentRole === 'admin') {
+  if (document.visibilityState === 'visible' && _currentRole === 'admin' && !_isSavingDB && (Date.now() - _lastCloudSync > 60000)) {
     recargarDatosNube(true);
   }
 });
@@ -1324,14 +1367,23 @@ async function syncDevolucionToFirestore(d) {
 
 // Sincronización general (guarda offline en localStorage y en la nube en Firestore)
 async function saveDB() {
+  _isSavingDB = true;
+  DB._updated = Date.now();
+  _lastCloudSync = DB._updated;
   localStorage.setItem('frescura_db', JSON.stringify(DB));
+  localStorage.setItem('frescura_db_updated', String(DB._updated));
   try {
-    await _DOC_LEGACY.set({ data: JSON.stringify(DB), version: DB_VERSION, updated: Date.now() });
+    await Promise.race([
+      _DOC_LEGACY.set({ data: JSON.stringify(DB), version: DB_VERSION, updated: DB._updated }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore saveDB timeout')), 3500))
+    ]);
     _COL_CONFIG.doc('general').set({ meta_mensual: DB.meta_mensual || 3000000 }).catch(() => {});
     console.log('[Firebase] Datos guardados con éxito en la nube (Firestore) ✓');
   } catch(e) {
     console.warn('[Firebase] saveDB error:', e.message);
-    showAdminToast('⚠️ Atención: No se pudo guardar en la nube (' + e.message + ')');
+    showAdminToast('⚠️ Guardado en memoria local (Nube: ' + e.message + ')');
+  } finally {
+    _isSavingDB = false;
   }
 }
 
@@ -4110,7 +4162,12 @@ async function renderPedidosWeb() {
       new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore timeout')), 3500))
     ]);
     snap.docs.forEach(d => {
-      const p = { id: d.id, ...d.data(), _source: 'firestore' };
+      const data = d.data();
+      if (data.estado === 'diagnostico' || data.ref === 'TEST-DIAG') {
+        _db.collection('pedidos_web').doc(d.id).delete().catch(()=>{});
+        return;
+      }
+      const p = { id: d.id, ...data, _source: 'firestore' };
       const key = p.ref || d.id;
       pedidosMap.set(key, p);
     });
@@ -4123,18 +4180,22 @@ async function renderPedidosWeb() {
 
   // 2. Sincronizar desde Servidor Hostinger (Garantía sin límite de cuota)
   try {
-    const res = await fetch('https://frescuranatural.com/api/pedidos.php', { signal: AbortSignal.timeout(3500) });
+    const res = await fetch('https://www.frescuranaturalcosmeticos.com/api/pedidos.php', { signal: AbortSignal.timeout(3500) });
     if (res.ok) {
       const data = await res.json();
       if (data && data.pedidos && Array.isArray(data.pedidos)) {
         data.pedidos.forEach(hp => {
+          if (hp.estado === 'diagnostico' || hp.ref === 'TEST-DIAG') return;
           const key = hp.ref || hp.id;
           if (!pedidosMap.has(key)) {
             pedidosMap.set(key, { ...hp, _source: 'hostinger' });
           } else {
-            // Actualizar si hostinger tiene datos adicionales
+            // Actualizar si hostinger tiene datos adicionales o estado ya confirmado/cancelado
             const existing = pedidosMap.get(key);
             if (!existing.items_json && hp.items_json) existing.items_json = hp.items_json;
+            if (hp.estado === 'confirmado' || hp.estado === 'cancelado') existing.estado = hp.estado;
+            if (hp.venta_id && !existing.venta_id) existing.venta_id = hp.venta_id;
+            if (hp.venta_num && !existing.venta_num) existing.venta_num = hp.venta_num;
           }
         });
       }
@@ -4143,7 +4204,17 @@ async function renderPedidosWeb() {
     console.warn('[pedidos_web] Hostinger fetch note:', errHost.message);
   }
 
-  let pedidos = Array.from(pedidosMap.values());
+  let pedidos = Array.from(pedidosMap.values()).map(p => {
+    const orderRefKey = p.ref || p.id || '';
+    const matchedVenta = (DB.ventas || []).find(v => (orderRefKey && (v.pedido_web_ref === orderRefKey || v.num === orderRefKey)) || (p.id && v.pedido_web_id === p.id));
+    if (localStorage.getItem('fn_confirmed_web_' + orderRefKey) === '1' || matchedVenta) {
+      p.estado = 'confirmado';
+      if (matchedVenta && !p.venta_num) p.venta_num = matchedVenta.num || matchedVenta.id;
+    } else if (localStorage.getItem('fn_cancelled_web_' + orderRefKey) === '1') {
+      p.estado = 'cancelado';
+    }
+    return p;
+  });
   _pedidosWebCache = pedidos;
 
   // Ordenar por fecha descendente
@@ -4228,7 +4299,9 @@ async function renderPedidosWeb() {
     const waUrl = telLimpio ? `https://wa.me/57${telLimpio.slice(-10)}?text=${encodeURIComponent('¡Hola ' + (p.cliente_nombre||'') + '! Te saludamos de Frescura Natural para confirmar tu pedido ' + (p.ref||'') + ' por valor de ' + fmt(p.total||0) + '.')}` : '#';
 
     let estadoBadge = '';
-    const st = p.estado || 'pendiente_confirmacion';
+    const orderRefKey = p.ref || p.id || '';
+    const isLocallyConfirmed = localStorage.getItem('fn_confirmed_web_' + orderRefKey) === '1';
+    const st = isLocallyConfirmed ? 'confirmado' : (p.estado || 'pendiente_confirmacion');
     if (st === 'pendiente_confirmacion') {
       estadoBadge = '<span class="badge" style="background:#fff3cd;color:#856404;border:1px solid #ffeeba;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600">⏳ Pendiente</span>';
     } else if (st === 'confirmado') {
@@ -4319,6 +4392,13 @@ async function confirmarPedidoWeb(pedidoKey) {
   if (!confirm(`¿Confirmar pedido ${pedido.ref || ''} de ${pedido.cliente_nombre || 'Cliente'} por ${fmt(pedido.total||0)}?\n\nSe creará el registro de venta, se vinculará el cliente y se descontará del inventario.`)) {
     return;
   }
+
+  // Asegurar arrays de DB defensivamente
+  if (!DB.clientes) DB.clientes = [];
+  if (!DB.ventas) DB.ventas = [];
+  if (!DB.productos) DB.productos = [];
+  if (!DB.detalle_ventas) DB.detalle_ventas = [];
+  if (!DB.movimientos) DB.movimientos = [];
 
   // 1. Vincular o crear cliente en DB.clientes
   let cliente = null;
@@ -4429,22 +4509,38 @@ async function confirmarPedidoWeb(pedidoKey) {
   cliente.total_historico = (cliente.total_historico || 0) + venta.total_pagado;
 
   await saveDB();
-  try { syncVentaToFirestore(venta); } catch(e){}
+  try { syncVentaToFirestore(venta, itemsDetalle); } catch(e){}
+
+  // Guardar en localStorage que este pedido fue confirmado localmente (inmune a fallos de cuota)
+  const orderRefKey = pedido.ref || pedido.id || ventaNum;
+  localStorage.setItem('fn_confirmed_web_' + orderRefKey, '1');
 
   // 4. Actualizar estado en Firestore y Hostinger
   try {
     if (pedido._source === 'firestore' || pedido.id) {
-      await _db.collection('pedidos_web').doc(pedido.id).update({
-        estado: 'confirmado',
-        procesado: true,
-        venta_id: ventaId,
-        venta_num: ventaNum,
-        fecha_confirmacion: new Date().toISOString()
-      });
+      await Promise.race([
+        _db.collection('pedidos_web').doc(pedido.id).update({
+          estado: 'confirmado',
+          procesado: true,
+          venta_id: ventaId,
+          venta_num: ventaNum,
+          fecha_confirmacion: new Date().toISOString()
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('pedidos_web update timeout')), 2500))
+      ]);
     }
   } catch(e) {
     console.warn('[pedidos_web] update estado error:', e.message);
   }
+
+  // Notificar también a Hostinger si está disponible
+  try {
+    fetch('https://www.frescuranaturalcosmeticos.com/api/pedidos.php', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ref: orderRefKey, estado: 'confirmado', venta_id: ventaId})
+    }).catch(()=>{});
+  } catch(e) {}
 
   pedido.estado = 'confirmado';
   pedido.venta_num = ventaNum;
@@ -4458,17 +4554,31 @@ async function cancelarPedidoWeb(pedidoKey) {
   if (!pedido) return;
   if (!confirm(`¿Estás seguro de descartar/cancelar el pedido ${pedido.ref || ''} de ${pedido.cliente_nombre || ''}?`)) return;
 
+  const orderRefKey = pedido.ref || pedido.id || '';
+  localStorage.setItem('fn_cancelled_web_' + orderRefKey, '1');
+
   try {
-    if (pedido.id && pedido._source === 'firestore') {
-      await _db.collection('pedidos_web').doc(pedido.id).update({
-        estado: 'cancelado',
-        procesado: false,
-        fecha_cancelacion: new Date().toISOString()
-      });
+    if (pedido.id && (pedido._source === 'firestore' || !String(pedido.id).startsWith('WEB-'))) {
+      await Promise.race([
+        _db.collection('pedidos_web').doc(pedido.id).update({
+          estado: 'cancelado',
+          procesado: false,
+          fecha_cancelacion: new Date().toISOString()
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('cancel timeout')), 2500))
+      ]);
     }
   } catch(e) {
     console.warn('cancelar pedido firestore error:', e.message);
   }
+
+  try {
+    fetch('https://www.frescuranaturalcosmeticos.com/api/pedidos.php', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ref: orderRefKey, estado: 'cancelado', fecha_cancelacion: new Date().toISOString()})
+    }).catch(()=>{});
+  } catch(e) {}
 
   pedido.estado = 'cancelado';
   showAdminToast(`Pedido ${pedido.ref || ''} cancelado`);
@@ -5636,7 +5746,10 @@ async function initApp() {
       snapshot.docChanges().forEach(change => {
         if (change.type !== 'added') return;
         const pedido = {id: change.doc.id, ...change.doc.data()};
-        const shownKey = 'fn_notif_web_' + (pedido.ref || pedido.id);
+        if (pedido.estado === 'diagnostico' || pedido.ref === 'TEST-DIAG') return;
+        const refKey = pedido.ref || pedido.id;
+        if (localStorage.getItem('fn_confirmed_web_' + refKey) === '1' || localStorage.getItem('fn_cancelled_web_' + refKey) === '1') return;
+        const shownKey = 'fn_notif_web_' + refKey;
         if (localStorage.getItem(shownKey)) return;
         localStorage.setItem(shownKey, '1');
         hasNew = true;
@@ -5644,7 +5757,7 @@ async function initApp() {
       });
 
       if (hasNew) {
-        const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\\w+)'/)?.[1] || '';
+        const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || '';
         if (activePage === 'pedidos_web') renderPedidosWeb();
       }
     }, err => console.warn('[onSnapshot pedidos_web]', err.message));
@@ -5655,16 +5768,19 @@ async function initApp() {
   // Polling de respaldo automático cada 20s para capturar pedidos de Hostinger incluso si Firestore excede cuota
   async function syncHostingerOrders() {
     try {
-      const res = await fetch('https://frescuranatural.com/api/pedidos.php', { signal: AbortSignal.timeout(3500) });
+      const res = await fetch('https://www.frescuranaturalcosmeticos.com/api/pedidos.php?t=' + Date.now(), { signal: AbortSignal.timeout(3500), cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (data && data.pedidos && Array.isArray(data.pedidos)) {
           let hasPending = false;
           let newlyDiscovered = 0;
           data.pedidos.forEach(p => {
-            if (p.estado === 'pendiente_confirmacion') {
+            if (p.estado === 'diagnostico' || p.ref === 'TEST-DIAG') return;
+            const refKey = p.ref || p.id;
+            const isDone = localStorage.getItem('fn_confirmed_web_' + refKey) === '1' || localStorage.getItem('fn_cancelled_web_' + refKey) === '1';
+            if (p.estado === 'pendiente_confirmacion' && !isDone) {
               hasPending = true;
-              const shownKey = 'fn_notif_web_' + (p.ref || p.id);
+              const shownKey = 'fn_notif_web_' + refKey;
               if (!localStorage.getItem(shownKey)) {
                 localStorage.setItem(shownKey, '1');
                 newlyDiscovered++;
@@ -5676,7 +5792,7 @@ async function initApp() {
             marcarNavDot('pedidos_web');
           }
           if (newlyDiscovered > 0) {
-            const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\\w+)'/)?.[1] || '';
+            const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || '';
             if (activePage === 'pedidos_web') renderPedidosWeb();
           }
         }
