@@ -370,6 +370,7 @@ textarea{resize:vertical;min-height:80px}
           </select>
         </div>
         <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="playOrderSound()" title="Probar sonido de notificación de pedido">🔔 Probar Sonido</button>
           <button class="btn btn-secondary btn-sm" onclick="renderPedidosWeb()">🔄 Actualizar Pedidos Web</button>
         </div>
       </div>
@@ -4022,11 +4023,73 @@ async function resolverCanje(canjeId, decision) {
   } catch(e) { alert('Error al resolver canje: ' + e.message); }
 }
 
-async 
 // ══════════════════════════════════════════════════════════════════
-// INTEGRACIÓN TIENDA WEB (PEDIDOS_WEB FIRESTORE)
+// INTEGRACIÓN TIENDA WEB (PEDIDOS_WEB FIRESTORE & HOSTINGER SYNC)
 // ══════════════════════════════════════════════════════════════════
 let _pedidosWebCache = [];
+let _audioCtx = null;
+
+// Reproductor de sonido armónico tipo timbre comercial para pedidos nuevos
+function playOrderSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!_audioCtx || _audioCtx.state === 'suspended') {
+      _audioCtx = new AudioCtx();
+    }
+    const ctx = _audioCtx;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(()=>{});
+    }
+
+    const now = ctx.currentTime;
+
+    // Tono 1: C5 (523.25 Hz)
+    const o1 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    o1.type = 'sine';
+    o1.frequency.setValueAtTime(523.25, now);
+    g1.gain.setValueAtTime(0.25, now);
+    g1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    o1.connect(g1);
+    g1.connect(ctx.destination);
+    o1.start(now);
+    o1.stop(now + 0.35);
+
+    // Tono 2: E5 (659.25 Hz)
+    const o2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(659.25, now + 0.12);
+    g2.gain.setValueAtTime(0.3, now + 0.12);
+    g2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    o2.connect(g2);
+    g2.connect(ctx.destination);
+    o2.start(now + 0.12);
+    o2.stop(now + 0.5);
+
+    // Tono 3: G5 (783.99 Hz) campana final
+    const o3 = ctx.createOscillator();
+    const g3 = ctx.createGain();
+    o3.type = 'triangle';
+    o3.frequency.setValueAtTime(783.99, now + 0.25);
+    g3.gain.setValueAtTime(0.35, now + 0.25);
+    g3.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+    o3.connect(g3);
+    g3.connect(ctx.destination);
+    o3.start(now + 0.25);
+    o3.stop(now + 0.85);
+  } catch(e) {
+    console.warn('[Audio] Error al reproducir aviso sonoro:', e);
+  }
+}
+
+// Activar contexto de audio con cualquier interacción del usuario
+window.addEventListener('click', () => {
+  if (_audioCtx && _audioCtx.state === 'suspended') {
+    _audioCtx.resume().catch(()=>{});
+  }
+}, { once: true });
 
 async function renderPedidosWeb() {
   const el = document.getElementById('pedidos-web-list');
@@ -4037,14 +4100,51 @@ async function renderPedidosWeb() {
     el.innerHTML = '<div class="card-body" style="color:var(--ink3);font-style:italic;padding:20px">Cargando pedidos web...</div>';
   }
 
+  let pedidosMap = new Map();
+  let firestoreQuotaExceeded = false;
+
+  // 1. Cargar desde Firestore (con timeout de 3.5s para no congelar la UI si hay límite de cuota)
   try {
-    const snap = await _db.collection('pedidos_web').get();
-    _pedidosWebCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await Promise.race([
+      _db.collection('pedidos_web').get(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore timeout')), 3500))
+    ]);
+    snap.docs.forEach(d => {
+      const p = { id: d.id, ...d.data(), _source: 'firestore' };
+      const key = p.ref || d.id;
+      pedidosMap.set(key, p);
+    });
   } catch (err) {
-    console.warn('[pedidos_web] error fetching:', err.message);
+    console.warn('[pedidos_web] Firestore error:', err.message);
+    if (err.message && (err.message.includes('Quota exceeded') || err.message.includes('resource-exhausted'))) {
+      firestoreQuotaExceeded = true;
+    }
   }
 
-  let pedidos = [..._pedidosWebCache];
+  // 2. Sincronizar desde Servidor Hostinger (Garantía sin límite de cuota)
+  try {
+    const res = await fetch('https://frescuranatural.com/api/pedidos.php', { signal: AbortSignal.timeout(3500) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.pedidos && Array.isArray(data.pedidos)) {
+        data.pedidos.forEach(hp => {
+          const key = hp.ref || hp.id;
+          if (!pedidosMap.has(key)) {
+            pedidosMap.set(key, { ...hp, _source: 'hostinger' });
+          } else {
+            // Actualizar si hostinger tiene datos adicionales
+            const existing = pedidosMap.get(key);
+            if (!existing.items_json && hp.items_json) existing.items_json = hp.items_json;
+          }
+        });
+      }
+    }
+  } catch (errHost) {
+    console.warn('[pedidos_web] Hostinger fetch note:', errHost.message);
+  }
+
+  let pedidos = Array.from(pedidosMap.values());
+  _pedidosWebCache = pedidos;
 
   // Ordenar por fecha descendente
   pedidos.sort((a, b) => {
@@ -4060,6 +4160,11 @@ async function renderPedidosWeb() {
 
   if (kpisEl) {
     kpisEl.innerHTML = `
+      ${firestoreQuotaExceeded ? `
+        <div class="alert-strip alert-warning" style="margin-bottom:12px;background:#fff8e1;border-left:4px solid #ffb300;padding:10px 14px;border-radius:4px;font-size:12px;color:#795548">
+          ℹ️ <strong>Sincronización Hostinger Activa:</strong> La cuota gratuita diaria de lectura de Firebase Firestore fue alcanzada hoy. Los pedidos se están sincronizando y respaldando directamente desde el servidor web de Hostinger sin ninguna pérdida.
+        </div>
+      ` : ''}
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px">
         <div class="kpi-card">
           <div class="kpi-label">Pedidos Web Totales</div>
@@ -4137,8 +4242,8 @@ async function renderPedidosWeb() {
       accionesHTML = `
         <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
           ${telLimpio ? `<a class="btn btn-secondary btn-sm" href="${waUrl}" target="_blank" title="Contactar por WhatsApp" style="color:#25d366;text-decoration:none;display:inline-flex;align-items:center;gap:4px">💬 WhatsApp</a>` : ''}
-          <button class="btn btn-primary btn-sm" onclick="confirmarPedidoWeb('${p.id}')">✓ Confirmar y Registrar</button>
-          <button class="btn btn-secondary btn-sm" style="color:#d9534f" onclick="cancelarPedidoWeb('${p.id}')" title="Rechazar pedido">✕</button>
+          <button class="btn btn-primary btn-sm" onclick="confirmarPedidoWeb('${p.id || p.ref}')">✓ Confirmar y Registrar</button>
+          <button class="btn btn-secondary btn-sm" style="color:#d9534f" onclick="cancelarPedidoWeb('${p.id || p.ref}')" title="Rechazar pedido">✕</button>
         </div>
       `;
     } else if (st === 'confirmado') {
@@ -4204,8 +4309,8 @@ async function renderPedidosWeb() {
   `;
 }
 
-async function confirmarPedidoWeb(pedidoId) {
-  const pedido = _pedidosWebCache.find(x => x.id === pedidoId);
+async function confirmarPedidoWeb(pedidoKey) {
+  const pedido = _pedidosWebCache.find(x => x.id === pedidoKey || x.ref === pedidoKey);
   if (!pedido) {
     alert('Pedido no encontrado en caché');
     return;
@@ -4250,7 +4355,7 @@ async function confirmarPedidoWeb(pedidoId) {
   // 2. Procesar ítems y descontar stock
   let itemsRaw = [];
   try {
-    if (pedido.items_json) itemsRaw = JSON.parse(pedido.items_json);
+    if (pedido.items_json) itemsRaw = typeof pedido.items_json === 'string' ? JSON.parse(pedido.items_json) : pedido.items_json;
   } catch(e){}
 
   const ventaId = uid('VEN');
@@ -4314,7 +4419,7 @@ async function confirmarPedidoWeb(pedidoId) {
     cashback_generado: 0,
     costo_productos: costoTotalVenta,
     pedido_web_ref: pedido.ref || '',
-    pedido_web_id: pedidoId
+    pedido_web_id: pedido.id || ''
   };
 
   DB.ventas.push(venta);
@@ -4326,42 +4431,48 @@ async function confirmarPedidoWeb(pedidoId) {
   await saveDB();
   try { syncVentaToFirestore(venta); } catch(e){}
 
-  // 4. Actualizar estado en Firestore pedidos_web
+  // 4. Actualizar estado en Firestore y Hostinger
   try {
-    await _db.collection('pedidos_web').doc(pedidoId).update({
-      estado: 'confirmado',
-      procesado: true,
-      venta_id: ventaId,
-      venta_num: ventaNum,
-      fecha_confirmacion: new Date().toISOString()
-    });
-    pedido.estado = 'confirmado';
-    pedido.venta_num = ventaNum;
+    if (pedido._source === 'firestore' || pedido.id) {
+      await _db.collection('pedidos_web').doc(pedido.id).update({
+        estado: 'confirmado',
+        procesado: true,
+        venta_id: ventaId,
+        venta_num: ventaNum,
+        fecha_confirmacion: new Date().toISOString()
+      });
+    }
   } catch(e) {
     console.warn('[pedidos_web] update estado error:', e.message);
   }
+
+  pedido.estado = 'confirmado';
+  pedido.venta_num = ventaNum;
 
   showAdminToast(`✓ Pedido ${ventaNum} confirmado y registrado en Ventas`);
   await renderPedidosWeb();
 }
 
-async function cancelarPedidoWeb(pedidoId) {
-  const pedido = _pedidosWebCache.find(x => x.id === pedidoId);
+async function cancelarPedidoWeb(pedidoKey) {
+  const pedido = _pedidosWebCache.find(x => x.id === pedidoKey || x.ref === pedidoKey);
   if (!pedido) return;
   if (!confirm(`¿Estás seguro de descartar/cancelar el pedido ${pedido.ref || ''} de ${pedido.cliente_nombre || ''}?`)) return;
 
   try {
-    await _db.collection('pedidos_web').doc(pedidoId).update({
-      estado: 'cancelado',
-      procesado: false,
-      fecha_cancelacion: new Date().toISOString()
-    });
-    pedido.estado = 'cancelado';
-    showAdminToast(`Pedido ${pedido.ref || ''} cancelado`);
-    await renderPedidosWeb();
+    if (pedido.id && pedido._source === 'firestore') {
+      await _db.collection('pedidos_web').doc(pedido.id).update({
+        estado: 'cancelado',
+        procesado: false,
+        fecha_cancelacion: new Date().toISOString()
+      });
+    }
   } catch(e) {
-    alert('Error al cancelar pedido: ' + e.message);
+    console.warn('cancelar pedido firestore error:', e.message);
   }
+
+  pedido.estado = 'cancelado';
+  showAdminToast(`Pedido ${pedido.ref || ''} cancelado`);
+  await renderPedidosWeb();
 }
 
 
@@ -5499,40 +5610,86 @@ async function initApp() {
   document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});});
 
 
-  // ── Real-time listener: new web orders (tienda online) ──
-  _db.collection('pedidos_web').where('estado','==','pendiente_confirmacion').onSnapshot(snapshot => {
-    let hasNew = false;
-    let pendingCount = snapshot.size || 0;
+  // ── Real-time listener: new web orders (tienda online con aviso sonoro y fallback Hostinger) ──
+  function notificarNuevoPedidoWeb(p) {
+    playOrderSound();
+    const n = document.createElement('div');
+    n.style.cssText = 'position:fixed;top:80px;right:20px;background:#1e1c18;color:#f5f2ed;padding:14px 20px;border-radius:6px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);border-left:3px solid #5a7a5c;cursor:pointer;max-width:320px';
+    n.innerHTML = '🌐🔔 <strong>Nuevo pedido web de ' + (p.cliente_nombre || 'Cliente') + '</strong><br><span style="font-size:11px;color:#8a847a">' + (p.ref||'') + ' · ' + fmt(p.total||0) + ' · Clic para revisar</span>';
+    n.onclick = () => { nav('pedidos_web'); n.remove(); };
+    document.body.appendChild(n);
+    setTimeout(() => { if (n.parentNode) n.remove(); }, 10000);
+  }
 
-    if (pendingCount > 0) {
-      marcarNavDot('pedidos_web');
-    } else {
-      quitarNavDot('pedidos_web');
-    }
+  // Listener Firestore en tiempo real
+  try {
+    _db.collection('pedidos_web').where('estado','==','pendiente_confirmacion').onSnapshot(snapshot => {
+      let hasNew = false;
+      let pendingCount = snapshot.size || 0;
 
-    snapshot.docChanges().forEach(change => {
-      if (change.type !== 'added') return;
-      const pedido = {id: change.doc.id, ...change.doc.data()};
-      const shownKey = 'fn_notif_web_' + pedido.id;
-      if (localStorage.getItem(shownKey)) return;
-      localStorage.setItem(shownKey, '1');
-      hasNew = true;
-      const n = document.createElement('div');
-      n.style.cssText = 'position:fixed;top:80px;right:20px;background:#1e1c18;color:#f5f2ed;padding:14px 20px;border-radius:6px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);border-left:3px solid #5a7a5c;cursor:pointer;max-width:320px';
-      n.innerHTML = '🌐 Nuevo pedido web de <strong>' + (pedido.cliente_nombre || 'Cliente') + '</strong><br><span style="font-size:11px;color:#8a847a">' + (pedido.ref||'') + ' · ' + fmt(pedido.total||0) + ' · Clic para revisar</span>';
-      n.onclick = () => { nav('pedidos_web'); n.remove(); };
-      document.body.appendChild(n);
-      setTimeout(() => { if (n.parentNode) n.remove(); }, 8000);
-    });
+      if (pendingCount > 0) {
+        marcarNavDot('pedidos_web');
+      } else {
+        quitarNavDot('pedidos_web');
+      }
 
-    if (hasNew) {
-      const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || '';
-      if (activePage === 'pedidos_web') renderPedidosWeb();
-    }
-  }, err => console.warn('[onSnapshot pedidos_web]', err.message));
+      snapshot.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const pedido = {id: change.doc.id, ...change.doc.data()};
+        const shownKey = 'fn_notif_web_' + (pedido.ref || pedido.id);
+        if (localStorage.getItem(shownKey)) return;
+        localStorage.setItem(shownKey, '1');
+        hasNew = true;
+        notificarNuevoPedidoWeb(pedido);
+      });
+
+      if (hasNew) {
+        const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\\w+)'/)?.[1] || '';
+        if (activePage === 'pedidos_web') renderPedidosWeb();
+      }
+    }, err => console.warn('[onSnapshot pedidos_web]', err.message));
+  } catch(e) {
+    console.warn('[pedidos_web] listener init error:', e.message);
+  }
+
+  // Polling de respaldo automático cada 20s para capturar pedidos de Hostinger incluso si Firestore excede cuota
+  async function syncHostingerOrders() {
+    try {
+      const res = await fetch('https://frescuranatural.com/api/pedidos.php', { signal: AbortSignal.timeout(3500) });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.pedidos && Array.isArray(data.pedidos)) {
+          let hasPending = false;
+          let newlyDiscovered = 0;
+          data.pedidos.forEach(p => {
+            if (p.estado === 'pendiente_confirmacion') {
+              hasPending = true;
+              const shownKey = 'fn_notif_web_' + (p.ref || p.id);
+              if (!localStorage.getItem(shownKey)) {
+                localStorage.setItem(shownKey, '1');
+                newlyDiscovered++;
+                notificarNuevoPedidoWeb(p);
+              }
+            }
+          });
+          if (hasPending) {
+            marcarNavDot('pedidos_web');
+          }
+          if (newlyDiscovered > 0) {
+            const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\\w+)'/)?.[1] || '';
+            if (activePage === 'pedidos_web') renderPedidosWeb();
+          }
+        }
+      }
+    } catch(e) {}
+  }
+
+  // Ejecutar sync inicial y cada 20 segundos
+  setTimeout(syncHostingerOrders, 3000);
+  setInterval(syncHostingerOrders, 20000);
 
 
-    // ── Real-time listener: new distributor orders (notification only) ──
+  // ── Real-time listener: new distributor orders (notification only) ──
   const PEDIDOS_COL = _db.collection('pedidos_dist');
   PEDIDOS_COL.where('procesado','==',false).onSnapshot(snapshot => {
     let hasNew = false;
