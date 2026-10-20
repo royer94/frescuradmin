@@ -724,9 +724,16 @@ textarea{resize:vertical;min-height:80px}
 
 <!-- MODAL: PRODUCTO -->
 <div class="modal-overlay" id="modal-producto">
-  <div class="modal" style="max-width:760px">
-    <div class="modal-header"><span class="modal-title" id="modal-producto-title">Nuevo Producto</span><button class="modal-close" onclick="closeModal('modal-producto')">✕</button></div>
-    <div class="modal-body" style="max-height:78vh;overflow-y:auto">
+  <div class="modal" style="max-width:760px;display:flex;flex-direction:column;max-height:90vh;overflow:hidden">
+    <div class="modal-header" style="flex-shrink:0;background:var(--surface);z-index:5">
+      <span class="modal-title" id="modal-producto-title">Nuevo Producto</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="saveProducto(false)">💾 Guardar</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="saveProducto(true)" style="background:var(--sage);border-color:var(--sage)">🌐 Publicar Web</button>
+        <button class="modal-close" onclick="closeModal('modal-producto')" style="margin-left:4px">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" style="flex:1;overflow-y:auto;min-height:0">
       <input type="hidden" id="p-id">
       <div class="form-row">
         <div class="form-group"><label>Nombre *</label><input type="text" id="p-nombre" oninput="autoSlugProductoWeb()"></div>
@@ -892,12 +899,12 @@ textarea{resize:vertical;min-height:80px}
         </div>
       </div>
     </div>
-    <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <div class="modal-footer" style="flex-shrink:0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;background:var(--surface);border-top:1px solid var(--border);z-index:5">
       <div id="p-web-unpublish-wrap"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary" onclick="closeModal('modal-producto')">Cancelar</button>
-        <button class="btn btn-secondary" id="btn-save-prod-erp" onclick="saveProducto(false)">Guardar solo en ERP</button>
-        <button class="btn btn-primary" id="btn-save-prod-web" onclick="saveProducto(true)" style="background:var(--sage);border-color:var(--sage)">🌐 Guardar y Publicar en Web</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-producto')">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btn-save-prod-erp" onclick="saveProducto(false)">💾 Guardar en ERP</button>
+        <button type="button" class="btn btn-primary" id="btn-save-prod-web" onclick="saveProducto(true)" style="background:#2d5a3d;border-color:#2d5a3d">🌐 Guardar y Publicar en Web</button>
       </div>
     </div>
   </div>
