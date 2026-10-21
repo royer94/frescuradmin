@@ -299,6 +299,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="nav-section">Negocio</div>
     <div class="nav-item" onclick="nav('productos')"><span class="icon">🧴</span><span>Productos</span></div>
     <div class="nav-item" onclick="nav('clientes')"><span class="icon">👥</span><span>Clientes</span></div>
+    <div class="nav-item" onclick="nav('reposicion')"><span class="icon">🔄</span><span>Reposición Inteligente</span><span id="reposicion-nav-badge" style="display:none;margin-left:auto;background:#5a7a5c;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:700">0</span></div>
     <div class="nav-item" onclick="nav('devoluciones')"><span class="icon">↩️</span><span>Devoluciones</span></div>
     <div class="nav-item" onclick="nav('distribuidores')"><span class="icon">🚚</span><span>Distribuidores</span></div>
     <div class="nav-item" onclick="nav('reportes')"><span class="icon">📋</span><span>Reportes</span></div>
@@ -478,6 +479,40 @@ textarea{resize:vertical;min-height:80px}
         <button class="btn btn-primary" onclick="openModalCliente()">+ Nuevo Cliente</button>
       </div>
       <div class="card"><div class="card-header"><span class="card-title">Base de Clientes</span><span class="text-sm text-muted" id="cashback-total-header"></span></div><div class="table-wrap" id="clientes-table"></div></div>
+    </div>
+
+
+    <!-- REPOSICIÓN INTELIGENTE ("Clientes listos para reponer") -->
+    <div class="page" id="page-reposicion">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="search-reposicion" placeholder="Buscar por cliente, teléfono o producto..." style="width:260px" oninput="renderReposicion()">
+          <select id="filter-estado-reposicion" onchange="renderReposicion()" style="width:auto">
+            <option value="accionable" selected>🎯 Listos para reponer & Próximos</option>
+            <option value="listo">🎯 Solo Listos para reponer (Momento Ideal)</option>
+            <option value="proximo">⏳ Próximos a terminar (En 7-12 días)</option>
+            <option value="atrasado">⚠️ Reposición atrasada (>2 meses)</option>
+            <option value="no_contactado">💬 No contactados recientemente</option>
+            <option value="todos">Todos los clientes con compras</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="renderReposicion()">🔄 Actualizar Bandeja</button>
+        </div>
+      </div>
+
+      <div class="kpi-row" id="reposicion-kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px"></div>
+
+      <div class="card">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <span class="card-title">Bandeja de Reposición Inteligente</span>
+            <span class="text-sm text-muted" style="margin-left:8px" id="reposicion-subtitulo"></span>
+          </div>
+          <span style="font-size:12px;color:var(--ink3);font-style:italic">Cálculo predictivo según ciclo de consumo botánico</span>
+        </div>
+        <div class="table-wrap" id="reposicion-table"></div>
+      </div>
     </div>
 
     <!-- DEVOLUCIONES -->
@@ -706,6 +741,14 @@ textarea{resize:vertical;min-height:80px}
           <option value="">Selecciona...</option><option>Envía</option><option>Interrapidísimo</option><option>Servientrega</option><option>Coordinadora</option><option>Otra</option>
         </select></div>
         <div class="form-group"><label>Número de guía</label><input type="text" id="v-guia" placeholder="Ej: 123456789"></div>
+      </div>
+      <div id="envio-guia-wa-buttons" style="display:none;margin-top:6px;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-xs" id="btn-modal-wa-guia" style="background:#25D366;color:#fff;border:none;display:none;align-items:center;gap:4px;padding:5px 10px;font-size:12px;font-weight:600;border-radius:4px;cursor:pointer" onclick="enviarGuiaWhatsApp(document.getElementById('v-edit-id')?.value)">
+          🚚 Enviar Guía por WhatsApp
+        </button>
+        <button type="button" class="btn btn-xs" id="btn-modal-wa-entrega" style="background:#128C7E;color:#fff;border:none;display:none;align-items:center;gap:4px;padding:5px 10px;font-size:12px;font-weight:600;border-radius:4px;cursor:pointer" onclick="enviarEntregaWhatsApp(document.getElementById('v-edit-id')?.value)">
+          📦 Notificar Entrega y Solicitar Confirmación
+        </button>
       </div>
       <div id="cashback-aplicar-zone" style="display:none;margin-bottom:12px">
         <div class="alert-strip alert-info">💜 <span id="cashback-disponible-txt"></span> <button class="btn btn-xs btn-gold" onclick="aplicarCashback()" id="btn-aplicar-cashback">Aplicar</button></div>
@@ -1220,11 +1263,11 @@ function resolverVinculoWebProducto(p) {
     return { web_id: 'prod_01KXZXRFZDZWEXGMJAYDTK779M', variant: '' };
   }
 
-  // 6. Sérums (30 mL / 50 mL)
+  // 6. Sérums (30 mL / 50 mL) — si no dice 50 mL en el nombre ni cuesta >= 44.000, es la presentación base de 30 mL
   if ((n.includes('serum') || n.includes('natural clear') || n.includes('hydra e') || n.includes('hydra-e') || n.includes('fuerza capilar') || n.includes('acne balance')) && !n.includes('pack') && !n.includes('combo') && !n.includes('jabon')) {
-    let variant = '';
-    if (n.includes('30') && n.includes('ml')) variant = '30 mL';
-    else if (n.includes('50') && n.includes('ml')) variant = '50 mL';
+    let variant = '30 mL';
+    if ((n.includes('50') && n.includes('ml')) || Number(p.precio) >= 44000) variant = '50 mL';
+    else if (n.includes('30') && n.includes('ml')) variant = '30 mL';
 
     if (n.includes('clear') || n.includes('despigmentante')) return { web_id: 'SER-001', variant };
     if (n.includes('fuerza capilar') || n.includes('oleoso capilar') || n.includes('capilar')) return { web_id: 'SER-002', variant };
@@ -1583,6 +1626,7 @@ function _applyDB(data) {
   });
   DB = data;
   recalcCashbackHistorico();
+  setTimeout(actualizarBadgeReposicion, 300);
 }
 
 // ── Regla comercial de envío (umbrales sobre subtotal de productos DESPUÉS del descuento) ──
@@ -2056,7 +2100,7 @@ function recalcCashbackHistorico() {
 // ══════════════════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════════════════
-const pageTitles = {dashboard:'Dashboard',ventas:'Ventas',pedidos_web:'Pedidos Tienda Web',inventario:'Inventario',gastos:'Gastos',flujo:'Flujo de Caja',productos:'Productos',clientes:'Clientes',devoluciones:'Devoluciones',distribuidores:'Distribuidores',reportes:'Reportes'};
+const pageTitles = {dashboard:'Dashboard',ventas:'Ventas',pedidos_web:'Pedidos Tienda Web',reposicion:'Reposición Inteligente',inventario:'Inventario',gastos:'Gastos',flujo:'Flujo de Caja',productos:'Productos',clientes:'Clientes',devoluciones:'Devoluciones',distribuidores:'Distribuidores',reportes:'Reportes'};
 
 function nav(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -2065,10 +2109,10 @@ function nav(page) {
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')?.includes(`'${page}'`))n.classList.add('active');});
   document.getElementById('page-title').textContent = pageTitles[page]||page;
   const actionBtn = document.getElementById('topbar-action');
-  const topActions = {dashboard:'+ Registrar Venta',ventas:'+ Nueva Venta',pedidos_web:'🔄 Actualizar',inventario:'+ Entrada',gastos:'+ Gasto',flujo:'',productos:'+ Producto',clientes:'+ Cliente',devoluciones:'+ Nueva Devolución',distribuidores:'+ Nuevo Distribuidor',reportes:''};
+  const topActions = {dashboard:'+ Registrar Venta',ventas:'+ Nueva Venta',pedidos_web:'🔄 Actualizar',reposicion:'🔄 Actualizar',inventario:'+ Entrada',gastos:'+ Gasto',flujo:'',productos:'+ Producto',clientes:'+ Cliente',devoluciones:'+ Nueva Devolución',distribuidores:'+ Nuevo Distribuidor',reportes:''};
   actionBtn.textContent = topActions[page]||'';
   actionBtn.style.display = topActions[page]?'':'none';
-  actionBtn.onclick = ()=>{const m={dashboard:openModalVenta,ventas:openModalVenta,pedidos_web:renderPedidosWeb,inventario:openModalEntrada,gastos:openModalGasto,productos:openModalProducto,clientes:openModalCliente,devoluciones:openModalDevolucion,distribuidores:openModalNuevoDist};if(m[page])m[page]();};
+  actionBtn.onclick = ()=>{const m={dashboard:openModalVenta,ventas:openModalVenta,pedidos_web:renderPedidosWeb,reposicion:renderReposicion,inventario:openModalEntrada,gastos:openModalGasto,productos:openModalProducto,clientes:openModalCliente,devoluciones:openModalDevolucion,distribuidores:openModalNuevoDist};if(m[page])m[page]();};
   renderPage(page);
   window.scrollTo(0,0);
   quitarNavDot(page); // el admin ya revisó esta sección, se quita el aviso pendiente
@@ -2257,10 +2301,11 @@ function renderVentas() {
   const q = document.getElementById('search-ventas')?.value.toLowerCase()||'';
   const fc = document.getElementById('filter-canal')?.value||'';
   const fm = document.getElementById('filter-mes-venta')?.value||'';
-  const meses=[...new Set(DB.ventas.map(v=>v.fecha?.slice(0,7)))].sort().reverse();
+  const ventasArr = (DB && Array.isArray(DB.ventas)) ? DB.ventas : [];
+  const meses=[...new Set(ventasArr.map(v=>v.fecha?.slice(0,7)))].sort().reverse();
   const ms=document.getElementById('filter-mes-venta');
   if(ms){const cv=ms.value;ms.innerHTML='<option value="">Todos los meses</option>'+meses.map(m=>`<option value="${m}" ${m===cv?'selected':''}>${m}</option>`).join('');}
-  let ventas=[...DB.ventas].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  let ventas=[...ventasArr].sort((a,b)=>b.fecha.localeCompare(a.fecha));
   if(fc)ventas=ventas.filter(v=>v.canal_venta===fc);
   if(fm)ventas=ventas.filter(v=>v.fecha?.startsWith(fm));
   if(q)ventas=ventas.filter(v=>{const c=getCliente(v.id_cliente);return v.id.toLowerCase().includes(q)||c?.nombre.toLowerCase().includes(q)});
@@ -2315,6 +2360,23 @@ function cycleEnvio(id) {
     _db.collection('pedidos_dist').doc(id).update({estado_envio: v.estado_envio, transportadora: v.transportadora||'', numero_guia: v.numero_guia||''})
       .then(() => console.log('[sync envio] OK ->', id, v.estado_envio))
       .catch((e) => { console.error('[sync envio] FALLÓ:', e.message); alert('⚠️ El estado de envío se guardó en tu panel, pero NO se pudo sincronizar con el distribuidor. Error: ' + e.message); });
+  }
+
+  // Notificaciones automáticas por WhatsApp
+  if (next === 'enviado') {
+    setTimeout(() => {
+      const nom = getCliente(v.id_cliente)?.nombre || 'el cliente';
+      if (confirm(`🚚 Pedido ${v.id} marcado como ENVIADO (${v.transportadora} #${v.numero_guia}).\n\n¿Deseas abrir WhatsApp ahora para enviar la guía y el enlace de rastreo a ${nom}?`)) {
+        enviarGuiaWhatsApp(id);
+      }
+    }, 150);
+  } else if (next === 'entregado') {
+    setTimeout(() => {
+      const nom = getCliente(v.id_cliente)?.nombre || 'el cliente';
+      if (confirm(`✅ Pedido ${v.id} marcado como ENTREGADO.\n\n¿Deseas abrir WhatsApp para notificar a ${nom} que la transportadora lo reportó como entregado y solicitar amablemente su confirmación de recepción?`)) {
+        enviarEntregaWhatsApp(id);
+      }
+    }, 150);
   }
 }
 
@@ -2374,6 +2436,7 @@ function editVenta(id){
 
 function updateVenta(id){
   const v=DB.ventas.find(x=>x.id===id); if(!v)return;
+  const prevEstadoEnvio = v.estado_envio;
   getVentaDetalle(id).forEach(d=>{const p=getProducto(d.id_producto);if(p)p.stock+=d.cantidad;});
   DB.detalle_ventas=DB.detalle_ventas.filter(d=>d.id_venta!==id);
   if(v.cashback_generado&&v.id_cliente){const c=getCliente(v.id_cliente);if(c)c.cashback=Math.max(0,(c.cashback||0)-v.cashback_generado);}
@@ -2434,6 +2497,22 @@ function updateVenta(id){
   }
   const ap=document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1]||'dashboard';
   renderPage(ap);
+
+  if (prevEstadoEnvio !== 'enviado' && v.estado_envio === 'enviado' && v.numero_guia) {
+    setTimeout(() => {
+      const nom = getCliente(v.id_cliente)?.nombre || 'el cliente';
+      if (confirm(`🚚 Venta ${id} guardada como ENVIADA (${v.transportadora} #${v.numero_guia}).\n\n¿Deseas abrir WhatsApp para enviar la guía y el enlace de rastreo a ${nom}?`)) {
+        enviarGuiaWhatsApp(id);
+      }
+    }, 250);
+  } else if (prevEstadoEnvio !== 'entregado' && v.estado_envio === 'entregado') {
+    setTimeout(() => {
+      const nom = getCliente(v.id_cliente)?.nombre || 'el cliente';
+      if (confirm(`✅ Venta ${id} marcada como ENTREGADA.\n\n¿Deseas abrir WhatsApp para notificar a ${nom} que la transportadora lo reportó como entregado y solicitar amablemente su confirmación de recepción?`)) {
+        enviarEntregaWhatsApp(id);
+      }
+    }, 250);
+  }
 }
 
 function deleteVenta(id) {
@@ -2515,6 +2594,517 @@ function getWhatsAppComprobanteUrl(id) {
 function enviarComprobanteWhatsApp(id) {
   const url = getWhatsAppComprobanteUrl(id);
   if (url) window.open(url, '_blank');
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// GUÍAS DE TRANSPORTE Y CONFIRMACIÓN DE ENTREGA (WHATSAPP)
+// ══════════════════════════════════════════════════════════════════
+
+function getTrackingUrl(transportadora, guia) {
+  if (!guia) return '';
+  const g = encodeURIComponent(guia.trim());
+  const t = (transportadora || '').toLowerCase();
+  if (t.includes('coordinadora')) {
+    return `https://coordinadora.com/seguimiento/seguimiento-en-linea/?guia=${g}`;
+  }
+  if (t.includes('interrapid') || t.includes('inter')) {
+    return `https://interrapidisimo.com/sigue-tu-envio/?guia=${g}`;
+  }
+  if (t.includes('servientrega')) {
+    return `https://www.servientrega.com/wps/portal/rastreo-envio`;
+  }
+  if (t.includes('envia') || t.includes('envía')) {
+    return `https://enviacolvanes.com/`;
+  }
+  return '';
+}
+
+function getWhatsAppGuiaTexto(id) {
+  const v = DB.ventas.find(x => x.id === id);
+  if (!v) return '';
+  const c = getCliente(v.id_cliente);
+  const nombre = (c && c.nombre) ? c.nombre.trim().split(' ')[0] : 'amiga/o';
+  const transp = v.transportadora || 'la transportadora';
+  const guia = v.numero_guia || '';
+  const rastreoUrl = getTrackingUrl(transp, guia);
+
+  let msg = `*FRESCURA NATURAL · GUÍA DE DESPACHO* 🌿🚚\n\n`;
+  msg += `¡Hola *${nombre}*! Esperamos que estés muy bien.\n\n`;
+  msg += `Tu pedido de cosmética natural ya fue despachado y va en camino a tu dirección:\n\n`;
+  msg += `📦 *Transportadora:* ${transp}\n`;
+  if (guia) msg += `🔢 *Número de guía:* ${guia}\n`;
+  if (rastreoUrl) msg += `🔗 *Rastreo en línea:* ${rastreoUrl}\n`;
+  msg += `\nEn el enlace anterior puedes consultar el estado de tu entrega en tiempo real.\n\n`;
+  msg += `¡Muchas gracias por elegirnos! Si tienes cualquier inquietud, escríbenos por aquí con gusto te atenderemos. 🍃✨`;
+  return msg;
+}
+
+function getWhatsAppGuiaUrl(id) {
+  const v = DB.ventas.find(x => x.id === id);
+  if (!v) return '';
+  const c = getCliente(v.id_cliente);
+  let tel = c?.telefono ? c.telefono.replace(/\D/g, '') : '';
+  if (tel && tel.length === 10 && tel.startsWith('3')) tel = '57' + tel;
+  const texto = getWhatsAppGuiaTexto(id);
+  return tel 
+    ? `https://api.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+}
+
+function enviarGuiaWhatsApp(id) {
+  const url = getWhatsAppGuiaUrl(id);
+  if (url) window.open(url, '_blank');
+}
+
+function getWhatsAppEntregaTexto(id) {
+  const v = DB.ventas.find(x => x.id === id);
+  if (!v) return '';
+  const c = getCliente(v.id_cliente);
+  const nombre = (c && c.nombre) ? c.nombre.trim().split(' ')[0] : 'amiga/o';
+  const transp = v.transportadora || 'la transportadora';
+  const guia = v.numero_guia ? ` (Guía #${v.numero_guia})` : '';
+
+  let msg = `*FRESCURA NATURAL · CONFIRMACIÓN DE ENTREGA* 🌿📦\n\n`;
+  msg += `¡Hola *${nombre}*! Esperamos que tengas un excelente día.\n\n`;
+  msg += `La transportadora (*${transp}*) nos acaba de reportar que tu pedido${guia} ya ha sido entregado en tu dirección.\n\n`;
+  msg += `¿Nos confirmas por favor si ya lo recibiste en perfecto estado?\n\n`;
+  msg += `Esperamos de corazón que disfrutes muchísimo tus productos naturales. Si tienes cualquier duda sobre su modo de uso o rutina de cuidado, estamos atentos por este mismo chat. 🌸✨`;
+  return msg;
+}
+
+function getWhatsAppEntregaUrl(id) {
+  const v = DB.ventas.find(x => x.id === id);
+  if (!v) return '';
+  const c = getCliente(v.id_cliente);
+  let tel = c?.telefono ? c.telefono.replace(/\D/g, '') : '';
+  if (tel && tel.length === 10 && tel.startsWith('3')) tel = '57' + tel;
+  const texto = getWhatsAppEntregaTexto(id);
+  return tel 
+    ? `https://api.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+}
+
+function enviarEntregaWhatsApp(id) {
+  const url = getWhatsAppEntregaUrl(id);
+  if (url) window.open(url, '_blank');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BANDEJA DE REPOSICIÓN INTELIGENTE ("Clientes listos para reponer")
+// ══════════════════════════════════════════════════════════════════
+
+const CICLOS_REPOSICION_DIAS = {
+  serum_30: 38,     // ~5 semanas (uso diario 3-4 gotas)
+  serum_50: 60,     // ~2 meses
+  serum_def: 45,
+  desodorante: 50,  // ~7 semanas
+  jabon_indiv: 25,  // ~3-4 semanas
+  jabon_kit: 60,    // ~2 meses
+  crema_facial: 45, // ~6 semanas
+  champu_solido: 35,// ~5 semanas
+  balsamo_labial: 50,
+  kit_completo: 50,
+  default: 40
+};
+
+function estimarCicloProducto(prod) {
+  if (!prod) return CICLOS_REPOSICION_DIAS.default;
+  const nombre = (prod.nombre || '').toLowerCase();
+  const id = (prod.id || '').toLowerCase();
+
+  if (nombre.includes('serum') || id.startsWith('ser-')) {
+    if (nombre.includes('50') || nombre.includes('50ml') || nombre.includes('50 ml')) return CICLOS_REPOSICION_DIAS.serum_50;
+    if (nombre.includes('30') || nombre.includes('30ml') || nombre.includes('30 ml')) return CICLOS_REPOSICION_DIAS.serum_30;
+    return CICLOS_REPOSICION_DIAS.serum_def;
+  }
+  if (nombre.includes('desodorante') || id.startsWith('des-') || nombre.includes('deofresh')) {
+    return CICLOS_REPOSICION_DIAS.desodorante;
+  }
+  if (nombre.includes('crema') || nombre.includes('hydraseal')) {
+    return CICLOS_REPOSICION_DIAS.crema_facial;
+  }
+  if (nombre.includes('champú') || nombre.includes('champu')) {
+    return CICLOS_REPOSICION_DIAS.champu_solido;
+  }
+  if (nombre.includes('balsamo') || nombre.includes('bálsamo') || id.startsWith('bal-') || nombre.includes('freshlips')) {
+    return CICLOS_REPOSICION_DIAS.balsamo_labial;
+  }
+  if (nombre.includes('kit') || id.startsWith('pac-') || id.startsWith('kit-') || nombre.includes('pack')) {
+    if (nombre.includes('x 3') || nombre.includes('x3') || nombre.includes('100gx3') || nombre.includes('100 g x 3')) return CICLOS_REPOSICION_DIAS.jabon_kit;
+    return CICLOS_REPOSICION_DIAS.kit_completo;
+  }
+  if (nombre.includes('jabón') || nombre.includes('jabon') || id.startsWith('jab-')) {
+    if (nombre.includes('x 3') || nombre.includes('x3') || nombre.includes('100gx3') || nombre.includes('100 g x 3')) return CICLOS_REPOSICION_DIAS.jabon_kit;
+    return CICLOS_REPOSICION_DIAS.jabon_indiv;
+  }
+  return CICLOS_REPOSICION_DIAS.default;
+}
+
+function calcularClientesReposicion() {
+  if (!DB || !Array.isArray(DB.clientes) || !Array.isArray(DB.ventas)) return [];
+  const hoyMs = new Date(today()).getTime();
+
+  // Ventas confirmadas con cliente asociado
+  const ventasConfirmadas = DB.ventas.filter(v => v.estado_pago === 'confirmado' && v.id_cliente);
+
+  // Última venta por cliente
+  const ultimaVentaPorCliente = {};
+  ventasConfirmadas.forEach(v => {
+    if (!ultimaVentaPorCliente[v.id_cliente] || v.fecha > ultimaVentaPorCliente[v.id_cliente].fecha) {
+      ultimaVentaPorCliente[v.id_cliente] = v;
+    }
+  });
+
+  // Historial de contactos en localStorage
+  let contactosMap = {};
+  try {
+    contactosMap = JSON.parse(localStorage.getItem('fn_reposicion_contactos') || '{}');
+  } catch(e) {}
+
+  const lista = [];
+
+  DB.clientes.forEach(c => {
+    const v = ultimaVentaPorCliente[c.id];
+    if (!v) return;
+
+    const detalles = getVentaDetalle(v.id);
+    if (!detalles.length) return;
+
+    const fechaVentaMs = new Date(v.fecha).getTime();
+    const diasTranscurridos = Math.max(0, Math.floor((hoyMs - fechaVentaMs) / 86400000));
+
+    // Producto principal y ciclo
+    let prodPrincipal = null;
+    let cicloDias = CICLOS_REPOSICION_DIAS.default;
+    let cantTotal = 0;
+
+    detalles.forEach(d => {
+      const p = getProducto(d.id_producto);
+      const ciclo = estimarCicloProducto(p);
+      cantTotal += (d.cantidad || 1);
+      if (!prodPrincipal || ciclo > cicloDias) {
+        prodPrincipal = p || { id: d.id_producto, nombre: d.id_producto, precio: d.precio_unitario || 0 };
+        cicloDias = ciclo;
+      }
+    });
+
+    if (cantTotal > 1) {
+      cicloDias = Math.round(cicloDias * (1 + (cantTotal - 1) * 0.75));
+    }
+
+    const pctConsumo = Math.min(150, Math.round((diasTranscurridos / (cicloDias || 1)) * 100));
+
+    let estado = 'reciente';
+    let estadoLabel = 'Uso reciente';
+    let estadoBadge = 'badge-blue';
+    let prioridad = 4;
+
+    if (diasTranscurridos >= (cicloDias - 4) && diasTranscurridos <= (cicloDias + 25)) {
+      estado = 'listo';
+      estadoLabel = '🎯 Listo para reponer';
+      estadoBadge = 'badge-green';
+      prioridad = 1;
+    } else if (diasTranscurridos >= (cicloDias - 12) && diasTranscurridos < (cicloDias - 4)) {
+      estado = 'proximo';
+      estadoLabel = '⏳ Próximo a terminar';
+      estadoBadge = 'badge-gold';
+      prioridad = 2;
+    } else if (diasTranscurridos > (cicloDias + 25)) {
+      estado = 'atrasado';
+      estadoLabel = '⚠️ Reposición atrasada';
+      estadoBadge = 'badge-terra';
+      prioridad = 3;
+    }
+
+    const ultimoContacto = contactosMap[c.id] || null;
+
+    lista.push({
+      cliente: c,
+      ultimaVenta: v,
+      detalles,
+      diasTranscurridos,
+      productoPrincipal: prodPrincipal,
+      cicloDias,
+      pctConsumo,
+      estado,
+      estadoLabel,
+      estadoBadge,
+      prioridad,
+      ultimoContacto
+    });
+  });
+
+  lista.sort((a,b) => {
+    if (a.prioridad !== b.prioridad) return a.prioridad - b.prioridad;
+    return Math.abs(100 - a.pctConsumo) - Math.abs(100 - b.pctConsumo);
+  });
+
+  return lista;
+}
+
+function contarClientesListosReposicion() {
+  const lista = calcularClientesReposicion();
+  return lista.filter(x => x.estado === 'listo' || x.estado === 'proximo').length;
+}
+
+function actualizarBadgeReposicion() {
+  const count = contarClientesListosReposicion();
+  const el = document.getElementById('reposicion-nav-badge');
+  if (el) {
+    el.textContent = count;
+    el.style.display = count > 0 ? 'inline-block' : 'none';
+  }
+}
+
+function getWhatsAppReposicionTexto(item) {
+  const c = item.cliente;
+  const p = item.productoPrincipal;
+  const nombre = (c && c.nombre) ? c.nombre.trim().split(' ')[0] : 'amiga/o';
+  const prodNombre = p ? p.nombre : 'tus productos botánicos';
+  const cb = c?.cashback || 0;
+  const esClub = c?.club_frescura || false;
+
+  let msg = `*FRESCURA NATURAL · TU CUIDADO NATURAL* 🌿🌸\n\n`;
+  msg += `¡Hola *${nombre}*! Esperamos que estés teniendo una excelente semana.\n\n`;
+  msg += `Hace unas semanas compraste tu *${prodNombre}* en Frescura Natural. Esperamos de todo corazón que estés notando los beneficios en tu rutina y sintiendo tu piel radiante ✨\n\n`;
+  msg += `Como calculamos que por estos días ya debe estar por terminarse, te escribimos para que no te quedes sin tu tratamiento diario. Tenemos stock fresco listo para despacho inmediato 🍃\n`;
+
+  if (esClub && cb > 0) {
+    msg += `\n💜 *Dato especial:* Tienes *${fmt(cb)}* de cashback acumulado a tu favor en tu cuenta del Club Frescura que puedes redimir de inmediato como descuento en este pedido.\n`;
+  } else if (!esClub) {
+    msg += `\n💜 *Dato especial:* ¿Conoces nuestro *Club Frescura*? Como miembro acumulas el *5% de cashback* en tus compras para descontar en futuras rutinas y accedes a beneficios exclusivos. Conoce más aquí:\n🔗 https://www.frescuranaturalcosmeticos.com/club-frescura/\n`;
+  }
+
+  msg += `\n¿Te gustaría que te preparemos tu pedido de reposición hoy mismo? Solo confírmanos por aquí y lo dejamos listo para ti 📦🌸`;
+  return msg;
+}
+
+function contactarReposicionWhatsApp(clienteId) {
+  const lista = calcularClientesReposicion();
+  const item = lista.find(x => x.cliente.id === clienteId);
+  if (!item) return;
+
+  const c = item.cliente;
+  let tel = c?.telefono ? c.telefono.replace(/\D/g, '') : '';
+  if (tel && tel.length === 10 && tel.startsWith('3')) tel = '57' + tel;
+
+  const texto = getWhatsAppReposicionTexto(item);
+  const url = tel
+    ? `https://api.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+
+  marcarClienteContactadoReposicion(clienteId);
+  window.open(url, '_blank');
+}
+
+function marcarClienteContactadoReposicion(clienteId) {
+  let contactosMap = {};
+  try {
+    contactosMap = JSON.parse(localStorage.getItem('fn_reposicion_contactos') || '{}');
+  } catch(e) {}
+  contactosMap[clienteId] = today();
+  localStorage.setItem('fn_reposicion_contactos', JSON.stringify(contactosMap));
+  renderReposicion();
+}
+
+function desmarcarClienteContactadoReposicion(clienteId) {
+  let contactosMap = {};
+  try {
+    contactosMap = JSON.parse(localStorage.getItem('fn_reposicion_contactos') || '{}');
+  } catch(e) {}
+  delete contactosMap[clienteId];
+  localStorage.setItem('fn_reposicion_contactos', JSON.stringify(contactosMap));
+  renderReposicion();
+}
+
+function iniciarVentaReposicion(clienteId, productoId) {
+  openModalVenta();
+  const c = getCliente(clienteId);
+  if (c) {
+    seleccionarClienteVenta(c.id, c.nombre);
+  }
+  if (productoId) {
+    setTimeout(() => {
+      const rows = document.querySelectorAll('#venta-items .form-row');
+      if (rows.length > 0) {
+        const lr = rows[0];
+        const sel = lr.querySelector('.vi-prod');
+        const txt = lr.querySelector('.vi-prod-txt');
+        const p = getProducto(productoId);
+        if (sel && p) {
+          sel.value = p.id;
+          if (txt) txt.value = `${p.nombre} (${fmt(p.precio)})`;
+          calcTotalVenta();
+        }
+      }
+    }, 100);
+  }
+}
+
+function renderReposicion() {
+  actualizarBadgeReposicion();
+  const q = document.getElementById('search-reposicion')?.value.toLowerCase().trim() || '';
+  const fEstado = document.getElementById('filter-estado-reposicion')?.value || 'accionable';
+
+  let lista = calcularClientesReposicion();
+
+  const countListos = lista.filter(x => x.estado === 'listo').length;
+  const countProximos = lista.filter(x => x.estado === 'proximo').length;
+  const countAtrasados = lista.filter(x => x.estado === 'atrasado').length;
+  const totalPotencial = lista
+    .filter(x => x.estado === 'listo' || x.estado === 'proximo')
+    .reduce((a, x) => a + (x.productoPrincipal?.precio || 0), 0);
+  const totalCashbackAccionable = lista
+    .filter(x => x.estado === 'listo' || x.estado === 'proximo')
+    .reduce((a, x) => a + (x.cliente?.cashback || 0), 0);
+
+  // Render KPIs
+  const kpiEl = document.getElementById('reposicion-kpis');
+  if (kpiEl) {
+    kpiEl.innerHTML = `
+      <div class="kpi-card">
+        <div class="kpi-label">🎯 Listos para Reponer</div>
+        <div class="kpi-value color-sage">${countListos}</div>
+        <div class="kpi-sub">Momento óptimo de contacto</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">⏳ Próximos a Terminar</div>
+        <div class="kpi-value color-gold">${countProximos}</div>
+        <div class="kpi-sub">En los próximos 7 a 12 días</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">💰 Potencial Recompra</div>
+        <div class="kpi-value">${fmt(totalPotencial)}</div>
+        <div class="kpi-sub">Listos + Próximos (${countListos + countProximos} clientes)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">💜 Cashback Redimible</div>
+        <div class="kpi-value color-purple">${fmt(totalCashbackAccionable)}</div>
+        <div class="kpi-sub">Incentivo clave de fidelización</div>
+      </div>
+    `;
+  }
+
+  // Filtrado
+  if (fEstado === 'accionable') {
+    lista = lista.filter(x => x.estado === 'listo' || x.estado === 'proximo');
+  } else if (fEstado === 'listo') {
+    lista = lista.filter(x => x.estado === 'listo');
+  } else if (fEstado === 'proximo') {
+    lista = lista.filter(x => x.estado === 'proximo');
+  } else if (fEstado === 'atrasado') {
+    lista = lista.filter(x => x.estado === 'atrasado');
+  } else if (fEstado === 'no_contactado') {
+    lista = lista.filter(x => !x.ultimoContacto && (x.estado === 'listo' || x.estado === 'proximo'));
+  }
+
+  if (q) {
+    lista = lista.filter(x => 
+      x.cliente.nombre.toLowerCase().includes(q) ||
+      (x.cliente.telefono || '').includes(q) ||
+      (x.cliente.ciudad || '').toLowerCase().includes(q) ||
+      (x.productoPrincipal?.nombre || '').toLowerCase().includes(q)
+    );
+  }
+
+  const subEl = document.getElementById('reposicion-subtitulo');
+  if (subEl) subEl.textContent = `(${lista.length} clientes encontrados)`;
+
+  const tableEl = document.getElementById('reposicion-table');
+  if (!tableEl) return;
+
+  if (!lista.length) {
+    tableEl.innerHTML = `
+      <div class="empty" style="padding:40px 20px;text-align:center">
+        <div class="empty-icon" style="font-size:32px;margin-bottom:8px">🎉</div>
+        <h3 style="margin:0 0 4px;font-size:16px">¡Todo al día en esta vista!</h3>
+        <p class="text-muted" style="font-size:13px;margin:0">No hay clientes pendientes bajo este filtro de reposición.</p>
+      </div>
+    `;
+    return;
+  }
+
+  tableEl.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Última Compra</th>
+          <th>Producto a Reponer</th>
+          <th style="min-width:140px">Ciclo de Consumo</th>
+          <th>💜 Cashback</th>
+          <th>Estado</th>
+          <th style="text-align:right">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lista.map(item => {
+          const c = item.cliente;
+          const v = item.ultimaVenta;
+          const p = item.productoPrincipal;
+          const cb = c.cashback || 0;
+          const pct = item.pctConsumo;
+          const barColor = pct >= 95 ? '#5a7a5c' : pct >= 70 ? '#e5a93c' : '#3a5a7a';
+
+          return `
+            <tr>
+              <td>
+                <div class="fw-600">${c.nombre}</div>
+                <div class="text-sm text-muted">${c.telefono || 'Sin teléfono'} ${c.ciudad ? '· ' + c.ciudad : ''}</div>
+              </td>
+              <td>
+                <div class="fw-600">${v.fecha}</div>
+                <div class="text-sm text-muted">Hace ${item.diasTranscurridos} días (${v.id})</div>
+              </td>
+              <td>
+                <div class="fw-600" style="max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${p?.nombre||''}">
+                  ${p?.nombre || 'Producto no identificado'}
+                </div>
+                <div class="text-sm color-sage font-mono">${fmt(p?.precio || 0)}</div>
+              </td>
+              <td>
+                <div style="font-size:11px;display:flex;justify-content:space-between;margin-bottom:3px">
+                  <span>Día ${item.diasTranscurridos} de ${item.cicloDias}</span>
+                  <span class="fw-600">${pct}%</span>
+                </div>
+                <div style="width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                  <div style="width:${Math.min(100, pct)}%;height:100%;background:${barColor};transition:width .3s"></div>
+                </div>
+              </td>
+              <td>
+                ${cb > 0 ? `<span class="cashback-pill">+${fmt(cb)}</span>` : '<span class="text-muted">—</span>'}
+              </td>
+              <td>
+                <span class="badge ${item.estadoBadge}">${item.estadoLabel}</span>
+                ${item.ultimoContacto ? `
+                  <div style="font-size:10px;color:var(--sage);margin-top:3px;display:flex;align-items:center;gap:3px">
+                    <span>✓ Contactado (${item.ultimoContacto})</span>
+                    <span style="cursor:pointer;color:var(--ink3);font-weight:bold" onclick="desmarcarClienteContactadoReposicion('${c.id}')" title="Desmarcar">✕</span>
+                  </div>
+                ` : ''}
+              </td>
+              <td style="text-align:right">
+                <div class="inline-actions" style="justify-content:flex-end">
+                  <button class="btn btn-xs" style="background:#25D366;color:#fff;border:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;cursor:pointer" onclick="contactarReposicionWhatsApp('${c.id}')" title="Abrir WhatsApp con mensaje personalizado de reposición">
+                    💬 WhatsApp
+                  </button>
+                  <button class="btn btn-xs btn-secondary" onclick="iniciarVentaReposicion('${c.id}', '${p?.id||''}')" title="Crear venta rápida para este cliente">
+                    🛒 Facturar
+                  </button>
+                  ${!item.ultimoContacto ? `
+                    <button class="btn btn-xs" style="background:none;border:1px dashed var(--border);color:var(--ink3);font-size:10px;padding:2px 5px" onclick="marcarClienteContactadoReposicion('${c.id}')" title="Marcar como contactado sin enviar">
+                      ✓
+                    </button>
+                  ` : ''}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
 }
 
 let _currentFacturaId = null;
