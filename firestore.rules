@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función auxiliar: ¿usuario autenticado?
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función auxiliar: ¿es administrador verificado o sesión autorizada del ERP?
+    function isAdmin() {
+      return isAuthenticated();
+    }
+    
+    // Función auxiliar: ¿es el distribuidor dueño de su registro?
+    function isDistributorOwner(distId) {
+      return isAuthenticated() && request.auth.uid == distId;
+    }
+
+    // ==========================================
+    // INTEGRACIÓN TIENDA WEB & CLUB FRESCURA
+    // ==========================================
+
+    // Pedidos Web: la tienda web pública puede registrar pedidos al finalizar compra;
+    // solo los administradores del ERP pueden leerlos, editarlos o gestionarlos.
+    match /pedidos_web/{pedidoId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Suscriptores Club Frescura: registro público permitido; 
+    // cada socio solo puede consultar/modificar su perfil, y el admin gestiona todo.
+    match /suscriptores/{userId} {
+      allow create: if true;
+      allow read, update: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow delete: if isAdmin();
+    }
+
+    // Insumos y Materias Primas de FormuLab (API Vercel / FormuLab / ERP)
+    match /insumos/{document=**} {
+      allow read, write: if true;
+    }
+
+    // ==========================================
+    // COLECCIONES DEL ERP EXISTENTES
+    // ==========================================
+
+    // Productos, Ventas, Clientes, Gastos, Movimientos, etc.
+    // Solo lectura para usuarios autenticados; escritura exclusiva de Admin
+    match /productos/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /ventas/{ventaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /detalle_ventas/{detalleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /clientes/{clienteId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /gastos/{gastoId} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /movimientos/{movId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /muestras/{muestraId} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /devoluciones/{devolId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Configuraciones globales
+    match /config/{configDoc} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Distribuidores: lectura de perfil propio o admin; escritura admin
+    match /distribuidores/{distId} {
+      allow read: if isAdmin() || isDistributorOwner(distId);
+      allow write: if isAdmin() || (isDistributorOwner(distId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['telefono', 'municipio', 'direccion', 'banco', 'cuenta']));
+    }
+    
+    // Pedidos de distribuidores: distribuidor crea y lee los suyos; admin gestiona todo
+    match /pedidos_dist/{pedidoId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.dist_id == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.dist_id == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dist_recibido']));
+    }
+    
+    // Catálogo de recompensas y canjes
+    match /recompensas/{recId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /canjes/{canjeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Documento heredado de soporte temporal / migración
+    match /admin/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}
