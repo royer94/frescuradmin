@@ -3912,10 +3912,41 @@ function procesarJSONPegadoInsumos() {
   }
   try {
     const parsed = JSON.parse(txt);
-    const rawList = parsed.raw_materials || parsed.insumos || parsed.materials || (Array.isArray(parsed) ? parsed : null);
+    const rawList = parsed.raw_materials || parsed.catalog || parsed.insumos || parsed.materials || (Array.isArray(parsed) ? parsed : null);
 
     if (!Array.isArray(rawList)) {
       alert('El texto no contiene una lista de materias primas válida.');
+      return;
+    }
+
+    const isMaster = parsed.mode === 'replace' || parsed.sync_mode === 'master' || parsed.source === 'FormuLab_Master';
+    if (isMaster) {
+      const cleanList = [];
+      const seen = new Set();
+      rawList.forEach(item => {
+        if (!item || !item.sku) return;
+        const key = item.sku.trim().toUpperCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        cleanList.push({
+          sku: item.sku.trim(),
+          commercial_name: item.commercial_name || item.nombre || '',
+          inci_name: item.inci_name || '',
+          phase_default: item.phase_default || item.fase || '',
+          density_g_ml: (item.density_g_ml != null && item.density_g_ml !== '' && !isNaN(Number(item.density_g_ml))) ? Number(item.density_g_ml) : null,
+          last_unit_cost: (item.last_unit_cost != null && item.last_unit_cost !== '' && !isNaN(Number(item.last_unit_cost))) ? Number(item.last_unit_cost) : 0,
+          cost_unit: item.cost_unit || 'g',
+          suppliers: item.suppliers || [],
+          used_in_formulas: item.used_in_formulas || [],
+          updated_at: item.updated_at || today()
+        });
+      });
+      DB.insumos = cleanList;
+      saveDB();
+      _insumosPage = 1;
+      renderInsumos();
+      closeModal('modal-pegar-insumos');
+      showAdminToast(`✓ Catálogo actualizado en Modo Maestro: ${DB.insumos.length} insumos oficiales`);
       return;
     }
 
@@ -3993,25 +4024,27 @@ async function syncInsumosFromAPI(silent = false) {
     }
 
     const data = await resp.json();
-    const rawList = data.raw_materials || data.insumos || (Array.isArray(data) ? data : null);
+    const rawList = data.raw_materials || data.insumos || data.catalog || (Array.isArray(data) ? data : null);
 
     if (!Array.isArray(rawList)) {
       throw new Error('La respuesta del servidor no contiene una lista de insumos válida.');
     }
 
-    if (!DB.insumos) DB.insumos = [];
-    const map = new Map();
-    DB.insumos.forEach(item => {
-      if (item.sku) map.set(item.sku.trim().toUpperCase(), item);
-    });
+    if (rawList.length === 0) {
+      throw new Error('El servidor API no devolvió insumos para sincronizar.');
+    }
 
-    let addedCount = 0;
-    let updatedCount = 0;
-
+    // ── FormuLab es la Fuente Única de la Verdad ──
+    // Se adopta exactamente el catálogo oficial de FormuLab (62 materias primas)
+    // y se depuran automáticamente todos los registros obsoletos o huérfanos del ERP.
+    const cleanList = [];
+    const seen = new Set();
     rawList.forEach(item => {
       if (!item || !item.sku) return;
       const key = item.sku.trim().toUpperCase();
-      const normalized = {
+      if (seen.has(key)) return;
+      seen.add(key);
+      cleanList.push({
         sku: item.sku.trim(),
         commercial_name: item.commercial_name || item.nombre || '',
         inci_name: item.inci_name || '',
@@ -4022,23 +4055,19 @@ async function syncInsumosFromAPI(silent = false) {
         suppliers: item.suppliers || [],
         used_in_formulas: item.used_in_formulas || [],
         updated_at: item.updated_at || today()
-      };
-
-      if (map.has(key)) {
-        Object.assign(map.get(key), normalized);
-        updatedCount++;
-      } else {
-        DB.insumos.push(normalized);
-        map.set(key, normalized);
-        addedCount++;
-      }
+      });
     });
+
+    const previousCount = (DB.insumos || []).length;
+    DB.insumos = cleanList;
+    _insumosPage = 1;
 
     await saveDB();
     renderInsumos();
 
+    const diff = previousCount - cleanList.length;
     if (!silent) {
-      showAdminToast('✓ Sincronizados ' + rawList.length + ' insumos (' + addedCount + ' nuevos, ' + updatedCount + ' actualizados)');
+      showAdminToast(`✓ Sincronizados ${cleanList.length} insumos oficiales de FormuLab (${diff > 0 ? diff + ' obsoletos depurados' : 'Catálogo al día'})`);
     }
   } catch (err) {
     console.error('[syncInsumosFromAPI]', err);
@@ -4091,7 +4120,7 @@ function importInsumosJSON(event) {
         });
         DB.insumos = cleanList;
         if (typeof autoMigrateToCollections === 'function') autoMigrateToCollections({ insumos: DB.insumos });
-        persist();
+        await saveDB();
         renderInsumos();
         alert(`✓ Catálogo actualizado en Modo Maestro: Ahora el ERP cuenta con exactamente ${DB.insumos.length} materias primas oficiales de FormuLab.`);
         return;
