@@ -4058,10 +4058,42 @@ function importInsumosJSON(event) {
   reader.onload = async (e) => {
     try {
       const parsed = JSON.parse(e.target.result);
-      const rawList = parsed.raw_materials || parsed.insumos || parsed.materials || (Array.isArray(parsed) ? parsed : null);
+      const rawList = parsed.raw_materials || parsed.catalog || parsed.insumos || parsed.materials || (Array.isArray(parsed) ? parsed : null);
 
       if (!Array.isArray(rawList)) {
         alert('El archivo no contiene un catálogo de materias primas reconocido de FormuLab.');
+        return;
+      }
+
+      // Modo Maestro: FormuLab es la fuente de la verdad
+      const reemplazar = confirm(`FormuLab es la fuente de la verdad de formulación.\n\nEl archivo contiene ${rawList.length} materias primas oficiales.\n\n¿Deseas REEMPLAZAR el catálogo del ERP para tener exactamente los ${rawList.length} insumos de FormuLab y eliminar duplicados/huérfanos?\n\n- Aceptar: Dejar exactamente los ${rawList.length} insumos oficiales de FormuLab.\n- Cancelar: Combinar manteniendo insumos antiguos.`);
+
+      if (reemplazar) {
+        const cleanList = [];
+        const seen = new Set();
+        rawList.forEach(item => {
+          if (!item || !item.sku) return;
+          const key = item.sku.trim().toUpperCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          cleanList.push({
+            sku: item.sku.trim(),
+            commercial_name: item.commercial_name || item.nombre || '',
+            inci_name: item.inci_name || '',
+            phase_default: item.phase_default || item.fase || '',
+            density_g_ml: (item.density_g_ml != null && item.density_g_ml !== '' && !isNaN(Number(item.density_g_ml))) ? Number(item.density_g_ml) : null,
+            last_unit_cost: (item.last_unit_cost != null && item.last_unit_cost !== '' && !isNaN(Number(item.last_unit_cost))) ? Number(item.last_unit_cost) : 0,
+            cost_unit: item.cost_unit || 'g',
+            suppliers: item.suppliers || [],
+            used_in_formulas: item.used_in_formulas || [],
+            updated_at: item.updated_at || today()
+          });
+        });
+        DB.insumos = cleanList;
+        if (typeof autoMigrateToCollections === 'function') autoMigrateToCollections({ insumos: DB.insumos });
+        persist();
+        renderInsumos();
+        alert(`✓ Catálogo actualizado en Modo Maestro: Ahora el ERP cuenta con exactamente ${DB.insumos.length} materias primas oficiales de FormuLab.`);
         return;
       }
 
