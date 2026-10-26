@@ -730,6 +730,24 @@ html, body {
     <!-- Error message -->
     <div id="login-error" style="background:#f5e8e8;border:1px solid #d49090;border-radius:4px;padding:8px 12px;font-size:13px;color:#9b3a3a;margin-bottom:14px;display:none"></div>
 
+    <!-- FACE ID / BIOMETRIC ZONE (Mobile & Desktop) -->
+    <div id="login-faceid-zone" style="display:none;margin-bottom:18px">
+      <button id="btn-login-faceid" onclick="loginWithBiometrics()" type="button"
+        style="width:100%;background:linear-gradient(135deg, #1e1c18, #2e2c28);color:#fff;border:1px solid #3a3830;border-radius:8px;padding:14px;font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,0.12);transition:all .2s">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          <path d="M9 9h.01M15 9h.01M10 13c.5.5 1.5.5 2 0M10 17c1 1 3 1 4 0"/>
+        </svg>
+        <span>Ingresar con Face ID</span>
+      </button>
+      <div id="faceid-status-msg" style="font-size:12px;color:#8a847a;margin-top:8px;min-height:16px"></div>
+      <div style="display:flex;align-items:center;gap:12px;margin:16px 0 14px">
+        <div style="flex:1;height:1px;background:#ddd8cf"></div>
+        <span style="font-size:11px;color:#8a847a;text-transform:uppercase;letter-spacing:1px;font-weight:500">O con contraseña</span>
+        <div style="flex:1;height:1px;background:#ddd8cf"></div>
+      </div>
+    </div>
+
     <!-- ADMIN form -->
     <div id="login-admin-form">
       <div style="margin-bottom:14px;text-align:left">
@@ -744,9 +762,30 @@ html, body {
           style="width:100%;padding:10px 13px;border:1px solid #ddd8cf;border-radius:4px;font-family:'Outfit',sans-serif;font-size:14px;outline:none"
           onkeydown="if(event.key==='Enter')doLogin()">
       </div>
+
+      <!-- Checkbox to activate Face ID when supported -->
+      <div id="faceid-setup-wrap" style="display:none;margin-bottom:14px;padding:9px 12px;background:#f5f8f5;border:1px solid #d4e4d5;border-radius:6px;text-align:left">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#2d5a3d;cursor:pointer;margin:0;font-weight:500">
+          <input type="checkbox" id="chk-enable-faceid" checked style="width:auto;margin:0">
+          <span>🪪 Activar Face ID en este dispositivo</span>
+        </label>
+      </div>
+
       <button onclick="doLogin()" style="width:100%;background:#5a7a5c;color:#fff;border:none;border-radius:4px;padding:12px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;cursor:pointer">
         Ingresar como Admin →
       </button>
+
+      <!-- Direct Face ID setup link when device supports it but not configured -->
+      <div id="faceid-enroll-direct" style="display:none;margin-top:14px;padding-top:12px;border-top:1px dashed #ddd8cf">
+        <button type="button" onclick="enrollFaceIdFromLogin()" style="background:none;border:none;color:#5a7a5c;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            <path d="M9 9h.01M15 9h.01M10 13c.5.5 1.5.5 2 0M10 17c1 1 3 1 4 0"/>
+          </svg>
+          Activar Face ID / Huella ahora
+        </button>
+      </div>
+
       <div style="text-align:center;margin-top:12px">
         <a href="javascript:void(0)" onclick="doForgotPassword()" style="font-size:12px;color:#8a847a;text-decoration:underline">¿Olvidaste tu contraseña?</a>
       </div>
@@ -793,6 +832,7 @@ html, body {
   </nav>
   <div class="nav-bottom">
     <button class="ai-btn" onclick="toggleAI()"><span>🤖</span><span>Asistente IA</span></button>
+    <button class="export-btn" onclick="logoutAdmin()" style="margin-top:6px" title="Cerrar sesión de administrador"><span>🚪</span><span>Cerrar Sesión</span></button>
   </div>
 </aside>
 
@@ -1123,6 +1163,19 @@ html, body {
               <input type="password" id="pwd-confirm" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r);font-family:'Outfit',sans-serif;font-size:13px;outline:none"></div>
             <div id="pwd-msg" style="font-size:13px;min-height:20px;margin-bottom:10px"></div>
             <button class="btn btn-primary" onclick="cambiarPassword()">🔒 Cambiar Contraseña</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <div class="card-header"><span class="card-title">🪪 Autenticación Biométrica (Face ID / Huella)</span></div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--ink3);margin-bottom:14px">Inicia sesión en un segundo desde tu iPhone, iPad o celular Android usando Face ID, Touch ID o huella dactilar, sin escribir contraseñas.</p>
+          <div id="settings-faceid-status" style="margin-bottom:14px;padding:12px 14px;border-radius:var(--r);font-size:13px;background:var(--bg2)"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-primary" id="btn-settings-register-faceid" onclick="handleSettingsFaceIdRegister()">🪪 Activar Face ID en este dispositivo</button>
+            <button class="btn btn-secondary" id="btn-settings-test-faceid" onclick="handleSettingsFaceIdTest()" style="display:none">🧪 Probar Face ID</button>
+            <button class="btn btn-danger" id="btn-settings-remove-faceid" onclick="handleSettingsFaceIdRemove()" style="display:none">Desactivar Face ID</button>
           </div>
         </div>
       </div>
@@ -4998,6 +5051,7 @@ function renderReportes() {
     ${muestras.map(m=>{const p=getProducto(m.id_producto);return`<tr><td>${m.fecha}</td><td>${p?.nombre||m.id_producto}</td><td><span class="badge badge-terra">${m.tipo}</span></td><td>${m.cantidad}</td><td>${m.nota||'—'}</td><td class="color-gold">${fmt((p?.costo||0)*m.cantidad)}</td></tr>`}).join('')}
     </tbody></table>`;
   document.getElementById('ai-report-output').innerHTML='';
+  renderSettingsFaceId();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -6386,6 +6440,17 @@ function setLoginRole(role) {
     roleDist.style.color = role==='distribuidor' ? '#fff' : '#8a847a';
   }
   if (loginErr) loginErr.style.display = 'none';
+
+  if (role === 'admin') {
+    initLoginBiometrics();
+  } else {
+    const fz = document.getElementById('login-faceid-zone');
+    const sw = document.getElementById('faceid-setup-wrap');
+    const ed = document.getElementById('faceid-enroll-direct');
+    if (fz) fz.style.display = 'none';
+    if (sw) sw.style.display = 'none';
+    if (ed) ed.style.display = 'none';
+  }
 }
 
 function showLoginError(msg) {
@@ -6395,6 +6460,226 @@ function showLoginError(msg) {
     e.style.display = 'block';
     setTimeout(() => { if (e) e.style.display = 'none'; }, 3500);
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// AUTENTICACIÓN BIOMÉTRICA / FACE ID (WebAuthn Platform)
+// ══════════════════════════════════════════════════════════
+
+async function isBiometricAvailable() {
+  try {
+    if (!window.isSecureContext) return false;
+    if (!window.PublicKeyCredential) return false;
+    if (!PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return false;
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch (e) {
+    console.warn('[FaceID] isBiometricAvailable error:', e);
+    return false;
+  }
+}
+
+function isFaceIdConfigured() {
+  return !!localStorage.getItem('fn_faceid_cred') && localStorage.getItem('fn_faceid_active') === 'true';
+}
+
+function buf2b64(buf) {
+  const bytes = new Uint8Array(buf);
+  let str = '';
+  for (let i = 0; i < bytes.length; i++) {
+    str += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(str);
+}
+
+function b642buf(b64) {
+  const binary = window.atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function registerBiometrics() {
+  const available = await isBiometricAvailable();
+  if (!available) {
+    throw new Error('Tu dispositivo o navegador no soporta autenticación biométrica (Face ID / Huella) o requiere conexión segura HTTPS.');
+  }
+
+  const challenge = new Uint8Array(32);
+  window.crypto.getRandomValues(challenge);
+  const userId = new Uint8Array(16);
+  window.crypto.getRandomValues(userId);
+
+  const createOptions = {
+    publicKey: {
+      challenge: challenge,
+      rp: {
+        name: 'Frescura Natural'
+      },
+      user: {
+        id: userId,
+        name: 'admin@frescuranatural.com',
+        displayName: 'Frescura Natural Admin'
+      },
+      pubKeyCredParams: [
+        { alg: -7, type: 'public-key' },    // ES256 (estándar Apple Face ID / Touch ID)
+        { alg: -257, type: 'public-key' }   // RS256
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        userVerification: 'required',
+        requireResidentKey: false
+      },
+      timeout: 60000
+    }
+  };
+
+  const credential = await navigator.credentials.create(createOptions);
+  if (!credential) throw new Error('No se completó la verificación biométrica.');
+
+  const credIdBase64 = buf2b64(credential.rawId);
+  localStorage.setItem('fn_faceid_cred', credIdBase64);
+  localStorage.setItem('fn_faceid_active', 'true');
+  localStorage.setItem('fn_faceid_date', new Date().toLocaleDateString('es-CO'));
+  return true;
+}
+
+async function loginWithBiometrics() {
+  const statusEl = document.getElementById('faceid-status-msg');
+  if (statusEl) {
+    statusEl.style.color = 'var(--ink3)';
+    statusEl.textContent = 'Escaneando con Face ID...';
+  }
+
+  try {
+    const credIdBase64 = localStorage.getItem('fn_faceid_cred');
+    if (!credIdBase64) {
+      throw new Error('Face ID no está configurado en este dispositivo.');
+    }
+
+    const challenge = new Uint8Array(32);
+    window.crypto.getRandomValues(challenge);
+    const credId = b642buf(credIdBase64);
+
+    const getOptions = {
+      publicKey: {
+        challenge: challenge,
+        allowCredentials: [{
+          id: credId,
+          type: 'public-key',
+          transports: ['internal']
+        }],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    };
+
+    const assertion = await navigator.credentials.get(getOptions);
+    if (!assertion) throw new Error('Verificación cancelada.');
+
+    // Autenticación exitosa
+    _currentRole = 'admin';
+    sessionStorage.setItem('fn_auth', 'admin');
+    const ls = document.getElementById('login-screen');
+    if (ls) ls.style.display = 'none';
+    if (statusEl) statusEl.textContent = '';
+    await initApp();
+    showAdminToast('✓ Bienvenido · Autenticado con Face ID');
+  } catch (err) {
+    console.warn('[Face ID error]', err);
+    if (statusEl) {
+      statusEl.style.color = '#9b3a3a';
+      if (err.name === 'NotAllowedError') {
+        statusEl.textContent = 'Face ID cancelado o no reconocido. Puedes usar tu contraseña.';
+      } else {
+        statusEl.textContent = err.message || 'Error en Face ID. Ingresa con contraseña.';
+      }
+    }
+  }
+}
+
+async function initLoginBiometrics() {
+  const faceidZone = document.getElementById('login-faceid-zone');
+  const setupWrap = document.getElementById('faceid-setup-wrap');
+  const directEnroll = document.getElementById('faceid-enroll-direct');
+  if (!faceidZone) return;
+
+  const available = await isBiometricAvailable();
+  if (!available) {
+    faceidZone.style.display = 'none';
+    if (setupWrap) setupWrap.style.display = 'none';
+    if (directEnroll) directEnroll.style.display = 'none';
+    return;
+  }
+
+  if (isFaceIdConfigured()) {
+    faceidZone.style.display = 'block';
+    if (setupWrap) setupWrap.style.display = 'none';
+    if (directEnroll) directEnroll.style.display = 'none';
+  } else {
+    faceidZone.style.display = 'none';
+    if (setupWrap) setupWrap.style.display = 'block';
+    if (directEnroll) directEnroll.style.display = 'block';
+  }
+}
+
+async function enrollFaceIdFromLogin() {
+  const pwd = (document.getElementById('login-pwd')?.value || '').trim();
+  const masterPwd = localStorage.getItem('fn_admin_pwd') || 'frescura2024';
+  if (!pwd) {
+    showLoginError('Ingresa tu contraseña de administrador para autorizar Face ID');
+    document.getElementById('login-pwd')?.focus();
+    return;
+  }
+  let valid = (pwd === masterPwd);
+  const email = (document.getElementById('login-email')?.value || '').trim();
+  if (!valid && email) {
+    try {
+      await firebase.auth().signInWithEmailAndPassword(email, pwd);
+      valid = true;
+    } catch(e){}
+  }
+  if (!valid) {
+    showLoginError('Contraseña incorrecta');
+    return;
+  }
+
+  try {
+    await registerBiometrics();
+    showAdminToast('✓ Face ID configurado exitosamente');
+    _currentRole = 'admin';
+    sessionStorage.setItem('fn_auth', 'admin');
+    const ls = document.getElementById('login-screen');
+    if (ls) ls.style.display = 'none';
+    await initApp();
+  } catch(err) {
+    if (err.name === 'NotAllowedError') {
+      showLoginError('Cancelaste la configuración de Face ID');
+    } else {
+      showLoginError(err.message || 'No se pudo configurar Face ID');
+    }
+  }
+}
+
+async function _postAdminLogin() {
+  _currentRole = 'admin';
+  sessionStorage.setItem('fn_auth', 'admin');
+  const ls = document.getElementById('login-screen');
+  if (ls) ls.style.display = 'none';
+
+  // Registrar Face ID si fue solicitado en el checkbox
+  const wantFaceId = document.getElementById('chk-enable-faceid')?.checked;
+  if (wantFaceId && !isFaceIdConfigured() && (await isBiometricAvailable())) {
+    try {
+      await registerBiometrics();
+      showAdminToast('✓ Face ID activado para este dispositivo');
+    } catch(e) {
+      console.warn('[Face ID setup on login]', e);
+    }
+  }
+
+  await initApp();
 }
 
 // ── Admin login ──────────────────────────────────────────────
@@ -6411,11 +6696,7 @@ async function doLogin() {
   if (email) {
     try {
       await firebase.auth().signInWithEmailAndPassword(email, pwd);
-      _currentRole = 'admin';
-      sessionStorage.setItem('fn_auth', 'admin');
-      const ls = document.getElementById('login-screen');
-      if (ls) ls.style.display = 'none';
-      await initApp();
+      await _postAdminLogin();
       return;
     } catch (e) {
       console.warn('[Firebase Auth] Login falló, comprobando contraseña maestra:', e.code);
@@ -6423,14 +6704,9 @@ async function doLogin() {
   }
 
   // 2) Fallback con contraseña administrativa (frescura2024 o personalizada)
-  // Garantiza acceso ininterrumpido durante la transición
   const masterPwd = localStorage.getItem('fn_admin_pwd') || 'frescura2024';
   if (pwd === masterPwd) {
-    _currentRole = 'admin';
-    sessionStorage.setItem('fn_auth', 'admin');
-    const ls = document.getElementById('login-screen');
-    if (ls) ls.style.display = 'none';
-    await initApp();
+    await _postAdminLogin();
     return;
   }
 
@@ -6480,11 +6756,130 @@ function checkAuth() {
   if (!auth) {
     document.getElementById('login-screen').style.display = 'flex';
     setLoginRole('admin');
+    initLoginBiometrics();
     return false;
   }
   if (auth === 'admin') { _currentRole = 'admin'; }
   // Distributor session restored in initApp after loading DB
   return true;
+}
+
+// ── Gestión de Face ID desde Configuración (Reportes) ────────
+async function renderSettingsFaceId() {
+  const container = document.getElementById('settings-faceid-status');
+  const btnReg = document.getElementById('btn-settings-register-faceid');
+  const btnTest = document.getElementById('btn-settings-test-faceid');
+  const btnRem = document.getElementById('btn-settings-remove-faceid');
+  if (!container) return;
+
+  const available = await isBiometricAvailable();
+  if (!available) {
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;color:var(--ink3)">
+        <span style="font-size:22px">ℹ️</span>
+        <div>
+          <strong>No disponible en este navegador</strong><br>
+          <span style="font-size:12px">El acceso con Face ID requiere un dispositivo compatible (iPhone, iPad, Android con sensor biométrico o Mac con Touch ID) bajo conexión segura HTTPS.</span>
+        </div>
+      </div>
+    `;
+    if (btnReg) btnReg.style.display = 'none';
+    if (btnTest) btnTest.style.display = 'none';
+    if (btnRem) btnRem.style.display = 'none';
+    return;
+  }
+
+  const configured = isFaceIdConfigured();
+  if (configured) {
+    const regDate = localStorage.getItem('fn_faceid_date') || 'Previamente';
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;color:var(--sage)">
+        <span style="font-size:22px">✅</span>
+        <div>
+          <strong style="color:var(--ink)">Face ID activo en este dispositivo</strong><br>
+          <span style="font-size:12px;color:var(--ink3)">Registrado el: ${regDate}. Puedes entrar al ERP sin escribir contraseña.</span>
+        </div>
+      </div>
+    `;
+    if (btnReg) btnReg.style.display = 'none';
+    if (btnTest) btnTest.style.display = 'inline-flex';
+    if (btnRem) btnRem.style.display = 'inline-flex';
+  } else {
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;color:var(--gold)">
+        <span style="font-size:22px">⚠️</span>
+        <div>
+          <strong style="color:var(--ink)">No configurado en este dispositivo</strong><br>
+          <span style="font-size:12px;color:var(--ink3)">Tu dispositivo es compatible con Face ID / biometría. Actívalo para ingresar con un solo toque.</span>
+        </div>
+      </div>
+    `;
+    if (btnReg) { btnReg.style.display = 'inline-flex'; btnReg.textContent = '🪪 Activar Face ID ahora'; }
+    if (btnTest) btnTest.style.display = 'none';
+    if (btnRem) btnRem.style.display = 'none';
+  }
+}
+
+async function handleSettingsFaceIdRegister() {
+  try {
+    await registerBiometrics();
+    showAdminToast('✓ Face ID activado con éxito en este dispositivo');
+    renderSettingsFaceId();
+  } catch (err) {
+    if (err.name !== 'NotAllowedError') {
+      alert('No se pudo activar Face ID: ' + err.message);
+    }
+  }
+}
+
+async function handleSettingsFaceIdTest() {
+  try {
+    const credIdBase64 = localStorage.getItem('fn_faceid_cred');
+    if (!credIdBase64) throw new Error('No hay credencial registrada');
+    const challenge = new Uint8Array(32);
+    window.crypto.getRandomValues(challenge);
+    const credId = b642buf(credIdBase64);
+
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: challenge,
+        allowCredentials: [{
+          id: credId,
+          type: 'public-key',
+          transports: ['internal']
+        }],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+    if (assertion) {
+      showAdminToast('✓ Verificación de Face ID exitosa');
+    }
+  } catch (err) {
+    if (err.name === 'NotAllowedError') {
+      showAdminToast('Prueba cancelada');
+    } else {
+      alert('Error en prueba de Face ID: ' + err.message);
+    }
+  }
+}
+
+function handleSettingsFaceIdRemove() {
+  if (confirm('¿Deseas desactivar Face ID en este dispositivo? Tendrás que usar tu contraseña para ingresar.')) {
+    localStorage.removeItem('fn_faceid_cred');
+    localStorage.removeItem('fn_faceid_active');
+    localStorage.removeItem('fn_faceid_date');
+    showAdminToast('Face ID desactivado en este dispositivo');
+    renderSettingsFaceId();
+  }
+}
+
+function logoutAdmin() {
+  if (confirm('¿Deseas cerrar la sesión de administrador?')) {
+    sessionStorage.removeItem('fn_auth');
+    try { firebase.auth().signOut(); } catch(e){}
+    location.reload();
+  }
 }
 
 
