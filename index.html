@@ -1427,7 +1427,7 @@ html, body {
         <!-- Fotografía y URL Slug -->
         <div class="form-row" style="align-items:start">
           <div class="form-group">
-            <label>📸 Fotografía del Producto (WebP automático)</label>
+            <label>📸 Foto Principal / Portada (Se ve en Tienda y como Foto #1)</label>
             <input type="file" id="p-web-foto-file" accept="image/*" onchange="handleProductoWebFoto(event)" style="font-size:12px">
             <input type="hidden" id="p-web-foto-base64">
             <input type="hidden" id="p-web-foto-existing">
@@ -1446,6 +1446,24 @@ html, body {
               Página: <strong style="color:var(--sage)" id="p-web-slug-preview">frescuranaturalcosmeticos.com/...</strong>
             </div>
           </div>
+        </div>
+
+        <!-- Galería de Fotos Adicionales (Fotos #2, #3, #4...) -->
+        <div class="form-group" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+            <label style="margin:0;font-weight:600;display:flex;align-items:center;gap:6px">
+              <span>🖼️ Fotos Adicionales de Galería (Se ven en la página del producto)</span>
+            </label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="p-web-gallery-count" style="font-size:11px;color:var(--sage);font-weight:600"></span>
+              <button type="button" id="btn-clear-all-gallery" class="btn btn-xs btn-secondary" style="font-size:10px;display:none;padding:2px 7px" onclick="clearAllWebGallery()">Quitar todas</button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">
+            Selecciona una o varias fotos adicionales (Fotos #2, #3, #4...). Se comprimen automáticamente a WebP (máx. 900×900px).
+          </div>
+          <input type="file" id="p-web-gallery-files" accept="image/*" multiple onchange="handleProductoWebGallery(event)" style="font-size:12px">
+          <div id="p-web-gallery-list" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px"></div>
         </div>
 
         <!-- Tipo Web, Presentación y Categorías Web -->
@@ -2185,6 +2203,14 @@ async function sincronizarStockConWeb(silent = true) {
   }
 }
 
+function extractWebGalleryImages(images, mainImg) {
+  if (!Array.isArray(images)) return [];
+  if (images.length > 0 && images[0] === mainImg) {
+    return images.slice(1).filter(Boolean);
+  }
+  return images.filter(img => img && img !== mainImg);
+}
+
 async function fetchPublishedFromWebServer() {
   try {
     const r = await fetch('https://www.frescuranaturalcosmeticos.com/api/publicar_producto.php?t=' + Date.now());
@@ -2201,6 +2227,16 @@ async function fetchPublishedFromWebServer() {
         if (wp.slug && !localP.web_slug) { localP.web_slug = wp.slug; changed = true; }
         if (wp.img && !localP.web_img) { localP.web_img = wp.img; changed = true; }
         if (wp.description && (!localP.desc || localP.desc.length < 40)) { localP.desc = wp.description; changed = true; }
+        if (Array.isArray(wp.images)) {
+          const mainImg = localP.web_img || wp.img;
+          const additional = extractWebGalleryImages(wp.images, mainImg);
+          const oldGalleryJson = JSON.stringify(localP.web_gallery || []);
+          const newGalleryJson = JSON.stringify(additional);
+          if (oldGalleryJson !== newGalleryJson) {
+            localP.web_gallery = additional;
+            changed = true;
+          }
+        }
       }
     });
     if (changed && document.getElementById('page-productos')?.classList.contains('active')) {
@@ -2221,7 +2257,7 @@ function _applyDB(data) {
     if (ins.last_unit_cost === undefined && ins.costo !== undefined) ins.last_unit_cost = ins.costo;
     if (ins.cost_unit === undefined) ins.cost_unit = 'g';
   });
-  data.productos.forEach(p => { if (p.tiene_descuento === undefined) p.tiene_descuento = false; });
+  data.productos.forEach(p => { if (p.tiene_descuento === undefined) p.tiene_descuento = false; if (p.web_gallery === undefined) p.web_gallery = []; });
   aplicarPreciosFeed(data.productos);
   hidratarFichasWebEnERP(data.productos);
   setTimeout(fetchPublishedFromWebServer, 800); scheduleStockSyncToWeb();
@@ -5649,38 +5685,144 @@ function syncCatErpToWeb(){
   }
 }
 
-function handleProductoWebFoto(ev){
+let _currentWebGalleryExisting = [];
+let _currentWebGalleryNew = [];
+
+function compressImageFileToWebP(file, maxDim = 900, quality = 0.86) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = function() {
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FAF6F0';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        let dataUrl = canvas.toDataURL('image/webp', quality);
+        if (!dataUrl.startsWith('data:image/webp')) dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve({
+          dataUrl,
+          width: w,
+          height: h,
+          name: file.name,
+          sizeKb: Math.round(dataUrl.length * 0.75 / 1024)
+        });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleProductoWebFoto(ev){
   const file = ev.target.files?.[0];
   if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e){
-    const img = new Image();
-    img.onload = function(){
-      const MAX = 900;
-      let w = img.width, h = img.height;
-      if(w > MAX || h > MAX){
-        if(w > h){ h = Math.round(h * MAX / w); w = MAX; }
-        else { w = Math.round(w * MAX / h); h = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#FAF6F0';
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(img, 0, 0, w, h);
-      let dataUrl = canvas.toDataURL('image/webp', 0.86);
-      if(!dataUrl.startsWith('data:image/webp')) dataUrl = canvas.toDataURL('image/jpeg', 0.86);
-      document.getElementById('p-web-foto-base64').value = dataUrl;
-      const prevImg = document.getElementById('p-web-foto-preview');
-      const wrap = document.getElementById('p-web-foto-preview-wrap');
-      const info = document.getElementById('p-web-foto-info');
-      if(prevImg) prevImg.src = dataUrl;
-      if(wrap) wrap.style.display = 'flex';
-      if(info) info.textContent = `Lista para subir (${w}×${h}px · ${Math.round(dataUrl.length*0.75/1024)} KB)`;
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+  try {
+    const res = await compressImageFileToWebP(file, 900, 0.86);
+    document.getElementById('p-web-foto-base64').value = res.dataUrl;
+    const prevImg = document.getElementById('p-web-foto-preview');
+    const wrap = document.getElementById('p-web-foto-preview-wrap');
+    const info = document.getElementById('p-web-foto-info');
+    if(prevImg) prevImg.src = res.dataUrl;
+    if(wrap) wrap.style.display = 'flex';
+    if(info) info.textContent = `Lista para subir (${res.width}×${res.height}px · ${res.sizeKb} KB)`;
+  } catch(e) {
+    console.error('Error al procesar foto principal:', e);
+  }
+}
+
+async function handleProductoWebGallery(ev){
+  const files = Array.from(ev.target.files || []);
+  if(!files.length) return;
+  for(const file of files){
+    try {
+      const res = await compressImageFileToWebP(file, 900, 0.86);
+      _currentWebGalleryNew.push(res);
+    } catch(err) {
+      console.warn('Error al procesar imagen de galería:', err);
+    }
+  }
+  ev.target.value = '';
+  renderWebGalleryThumbnails();
+}
+
+function renderWebGalleryThumbnails() {
+  const container = document.getElementById('p-web-gallery-list');
+  const countEl = document.getElementById('p-web-gallery-count');
+  const clearAllBtn = document.getElementById('btn-clear-all-gallery');
+  if (!container) return;
+
+  const totalCount = _currentWebGalleryExisting.length + _currentWebGalleryNew.length;
+  if (countEl) {
+    countEl.textContent = totalCount ? `${totalCount} foto${totalCount > 1 ? 's' : ''} adicional${totalCount > 1 ? 'es' : ''}` : '';
+  }
+  if (clearAllBtn) {
+    clearAllBtn.style.display = totalCount > 0 ? 'inline-block' : 'none';
+  }
+
+  if (totalCount === 0) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--ink3);font-style:italic;padding:4px 0">Sin fotos adicionales aún. Puedes seleccionar una o varias imágenes arriba.</div>';
+    return;
+  }
+
+  let html = '';
+  let photoIndex = 2; // Foto #1 es la principal / portada
+
+  // 1. Fotos existentes publicadas en el servidor
+  _currentWebGalleryExisting.forEach((relPath, idx) => {
+    const fullSrc = relPath.startsWith('http') ? relPath : ('https://www.frescuranaturalcosmeticos.com/' + relPath.replace(/^\/+/, ''));
+    html += `
+      <div style="position:relative;width:82px;border-radius:8px;border:1px solid var(--border);background:var(--card);padding:5px;box-shadow:0 1px 3px rgba(0,0,0,0.06);display:flex;flex-direction:column;align-items:center;box-sizing:border-box">
+        <button type="button" onclick="removeWebGalleryExisting(${idx})" title="Quitar de la galería" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#e53e3e;color:#fff;border:2px solid var(--card);font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;padding:0;z-index:2">&times;</button>
+        <img src="${fullSrc}" alt="Foto #${photoIndex}" onerror="this.style.opacity='0.4';this.title='Error al cargar'" style="width:70px;height:70px;object-fit:cover;border-radius:6px;background:#FAF6F0;display:block">
+        <div style="margin-top:4px;font-size:10px;font-weight:700;color:var(--ink2);text-align:center;line-height:1.2">Foto #${photoIndex}</div>
+        <div style="font-size:9px;color:var(--ink3);text-align:center">Web</div>
+      </div>
+    `;
+    photoIndex++;
+  });
+
+  // 2. Nuevas fotos seleccionadas por el usuario
+  _currentWebGalleryNew.forEach((item, idx) => {
+    const src = typeof item === 'string' ? item : item.dataUrl;
+    const sizeText = item.sizeKb ? `${item.sizeKb} KB` : 'Nueva';
+    html += `
+      <div style="position:relative;width:82px;border-radius:8px;border:1px solid var(--sage, #606C38);background:var(--card);padding:5px;box-shadow:0 1px 3px rgba(0,0,0,0.06);display:flex;flex-direction:column;align-items:center;box-sizing:border-box">
+        <button type="button" onclick="removeWebGalleryNew(${idx})" title="Quitar imagen" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#e53e3e;color:#fff;border:2px solid var(--card);font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;padding:0;z-index:2">&times;</button>
+        <img src="${src}" alt="Foto #${photoIndex}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;background:#FAF6F0;display:block">
+        <div style="margin-top:4px;font-size:10px;font-weight:700;color:var(--sage);text-align:center;line-height:1.2">Foto #${photoIndex}</div>
+        <div style="font-size:9px;color:var(--sage);font-weight:600;text-align:center">${sizeText}</div>
+      </div>
+    `;
+    photoIndex++;
+  });
+
+  container.innerHTML = html;
+}
+
+function removeWebGalleryExisting(idx) {
+  _currentWebGalleryExisting.splice(idx, 1);
+  renderWebGalleryThumbnails();
+}
+
+function removeWebGalleryNew(idx) {
+  _currentWebGalleryNew.splice(idx, 1);
+  renderWebGalleryThumbnails();
+}
+
+function clearAllWebGallery() {
+  _currentWebGalleryExisting = [];
+  _currentWebGalleryNew = [];
+  renderWebGalleryThumbnails();
 }
 
 function clearProductoWebFoto(){
@@ -5702,8 +5844,28 @@ function populateWebFieldsModal(p){
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   const fileEl = document.getElementById('p-web-foto-file');
   if(fileEl) fileEl.value = '';
+  const galleryFilesEl = document.getElementById('p-web-gallery-files');
+  if(galleryFilesEl) galleryFilesEl.value = '';
   const slugEl = document.getElementById('p-web-slug');
   if(slugEl) slugEl.dataset.manual = p?.web_slug ? '1' : '0';
+
+  // Inicializar estado de la galería multifoto
+  _currentWebGalleryNew = [];
+  let initialGallery = [];
+  if (p?.web_gallery) {
+    if (Array.isArray(p.web_gallery)) {
+      initialGallery = [...p.web_gallery];
+    } else if (typeof p.web_gallery === 'string') {
+      try {
+        const parsed = JSON.parse(p.web_gallery);
+        if (Array.isArray(parsed)) initialGallery = parsed;
+      } catch(e) {
+        initialGallery = p.web_gallery.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+  }
+  _currentWebGalleryExisting = initialGallery.filter(img => img && img !== p?.web_img);
+  renderWebGalleryThumbnails();
 
   if(p){
     document.getElementById('p-web-ingredientes').value = p.web_ingredientes || '';
@@ -5747,6 +5909,9 @@ function populateWebFieldsModal(p){
     document.getElementById('p-web-foto-preview-wrap').style.display = 'none';
     document.getElementById('p-web-status-badge').innerHTML = '<span class="badge badge-gray" style="font-size:11px">Nuevo producto</span>';
     document.getElementById('p-web-unpublish-wrap').innerHTML = '';
+    _currentWebGalleryExisting = [];
+    _currentWebGalleryNew = [];
+    renderWebGalleryThumbnails();
     syncCatErpToWeb();
   }
   updateSlugPreview();
@@ -5951,6 +6116,8 @@ async function saveProducto(publishToWeb = false){
     targetId = `${prefix}-${String(count).padStart(3,'0')}`;
   }
 
+  const galleryBase64List = _currentWebGalleryNew.map(item => typeof item === 'string' ? item : item.dataUrl).filter(Boolean);
+  const existingGalleryList = [..._currentWebGalleryExisting];
   const existingProd = existingId ? getProducto(existingId) : null;
   const data={
     nombre,categoria,costo,precio,
@@ -5974,6 +6141,7 @@ async function saveProducto(publishToWeb = false){
     web_variants: webVariants,
     web_vprices: webVprices,
     web_img: document.getElementById('p-web-foto-existing')?.value || existingProd?.web_img || '',
+    web_gallery: existingGalleryList,
     web_publicado: existingProd?.web_publicado || false
   };
 
@@ -6021,7 +6189,9 @@ async function saveProducto(publishToWeb = false){
         vprices: (_isMultiSkuFamily && _seed.vprices?.length) ? _seed.vprices : prodRef.web_vprices,
         vimages: (_seed && _seed.vimages) ? _seed.vimages : {},
         existing_img: (_isMultiSkuFamily && !fotoBase64) ? _seed.img : prodRef.web_img,
-        image_base64: fotoBase64
+        image_base64: fotoBase64,
+        existing_gallery: existingGalleryList,
+        gallery_base64: galleryBase64List
       };
       const resp = await fetch(FN_WEB_PUBLISH_URL, {
         method: 'POST',
@@ -6035,6 +6205,12 @@ async function saveProducto(publishToWeb = false){
       prodRef.web_publicado = true;
       if(resJson.product?.slug) prodRef.web_slug = resJson.product.slug;
       if(resJson.product?.img) prodRef.web_img = resJson.product.img;
+      if(Array.isArray(resJson.product?.images)){
+        const mainImg = resJson.product.img || resJson.product.images[0];
+        prodRef.web_gallery = extractWebGalleryImages(resJson.product.images, mainImg);
+      }
+      _currentWebGalleryNew = [];
+      _currentWebGalleryExisting = [...(prodRef.web_gallery || [])];
       saveDB();
       closeModal('modal-producto');
       renderProductos();
