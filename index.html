@@ -7069,7 +7069,7 @@ function logoutAdmin() {
 let _configComisiones = {
   tramos_comision: [
     {monto: 0,      pct: 0},
-    {monto: 60000,  pct: 5},
+    {monto: 70000,  pct: 5},
     {monto: 120000, pct: 9},
     {monto: 200000, pct: 14},
     {monto: 300000, pct: 20},
@@ -7099,7 +7099,7 @@ function calcComision(total) {
   const puntos = _configComisiones.tramos_comision;
   let pct;
   if (total < puntos[1].monto) {
-    // Corte duro: por debajo del primer tramo real (ej. $60.000), siempre 0% — sin transición gradual desde $0
+    // Corte duro: por debajo del primer tramo real (ej. $70.000), siempre 0% — sin transición gradual desde $0
     pct = puntos[0].pct;
   } else if (total >= puntos[puntos.length-1].monto) {
     pct = puntos[puntos.length-1].pct;
@@ -7121,7 +7121,7 @@ function calcComision(total) {
 function ventasMensualesDistribuidor(distId, mesStr) {
   const mes = mesStr || today().slice(0,7);
   return DB.ventas.filter(v => v.dist_id === distId && v.estado_pago === 'confirmado' && (v.fecha||'').startsWith(mes))
-    .reduce((a,v) => a + (v.total_pagado||0), 0);
+    .reduce((a,v) => a + (v.subtotal_productos != null ? v.subtotal_productos : ((v.total_pagado||0) - (v.costo_envio||0))), 0);
 }
 
 // Comisión "vigente" del distribuidor este mes, recalculada automáticamente con cada venta confirmada
@@ -8158,21 +8158,32 @@ async function renderDistribuidores() {
     const comMesActual = calcComisionMensualDistribuidor(d.id); // vigente hoy, mes en curso
 
     const pedidosHTML = dPedidos.length === 0
-      ? '<tr><td colspan="8" style="text-align:center;color:var(--ink3);font-style:italic;padding:12px">Sin pedidos registrados</td></tr>'
+      ? '<tr><td colspan="9" style="text-align:center;color:var(--ink3);font-style:italic;padding:12px">Sin pedidos registrados</td></tr>'
       : dPedidos.map(p => {
           // Comisión del pedido, según el % vigente en el MES de ese pedido (recalculado sobre ventas acumuladas ese mes)
           const pCom = calcComisionMensualDistribuidor(d.id, (p.fecha||'').slice(0,7));
-          const pComVal = { pct: pCom.pct, val: (p.total||0) * (pCom.pct/100) };
+          const subtotalComisionable = (p.subtotal_productos != null) ? p.subtotal_productos : ((p.total||0) - (p.flete||0));
+          const pComVal = { pct: pCom.pct, val: subtotalComisionable * (pCom.pct/100) };
           const num  = p.num || ('#'+(p.dist_consecutivo||'?').toString().padStart(4,'0'));
           const esConf = p.estado_pago === 'confirmado';
           const esCancelado = p.estado_pago === 'cancelado';
           const comPag = p.comision_pagada === true;
           const recibido = p.dist_recibido === true;
+
+          const esOtra = p.tipo_destino === 'cliente_otra_ciudad';
+          const destinoBadge = esOtra
+            ? `<span style="background:#eff6ff;color:#1e40af;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:4px;border:1px solid #bfdbfe;white-space:nowrap;display:inline-block" title="${p.destinatario_nombre||''} · ${p.destinatario_direccion||''} · Tel: ${p.destinatario_telefono||''}">🌎 ${p.destinatario_ciudad||'Otra Ciudad'}<br><span style="font-size:9.5px;color:var(--ink3);font-weight:400">${p.destinatario_nombre||'Cliente final'}</span></span>`
+            : `<span style="background:#f3f4f6;color:var(--ink2);font-size:10.5px;padding:2px 7px;border-radius:4px;white-space:nowrap;display:inline-block">🚚 Domicilio distribuidora</span>`;
+
           return `<tr style="background:var(--bg)${esCancelado?';opacity:0.55':''}">
             <td style="font-family:'JetBrains Mono',monospace;font-size:11px;padding-left:20px">${num}</td>
-            <td>${p.fecha||'—'}</td>
-            <td style="font-weight:600">${fmt(p.total||0)}</td>
-            <td style="color:var(--sage)">${fmt(pComVal.val)} (${pComVal.pct}%)</td>
+            <td style="white-space:nowrap;font-size:11.5px">${p.fecha||'—'}</td>
+            <td>${destinoBadge}</td>
+            <td style="font-weight:600;white-space:nowrap">
+              ${fmt(p.total||0)}
+              ${p.flete > 0 ? `<div style="font-size:9.5px;color:#92400e;font-weight:400">Prod: ${fmt(subtotalComisionable)} + Fle: ${fmt(p.flete)}</div>` : ''}
+            </td>
+            <td style="color:var(--sage);white-space:nowrap">${fmt(pComVal.val)} (${pComVal.pct}%)</td>
             <td>
               ${esCancelado
                 ? '<span style="border-radius:4px;padding:5px 9px;font-size:11px;white-space:nowrap;background:var(--red-light);color:var(--red);border:1px solid var(--red)">❌ Cancelado</span>'
@@ -8209,13 +8220,22 @@ async function renderDistribuidores() {
 
     return `
       <tr style="cursor:pointer" onclick="toggleDistRow('${d.id}')">
-        <td style="font-weight:600">${d.nombre}</td>
+        <td style="font-weight:600">
+          ${d.nombre}
+          ${d.fecha_registro ? '<div style="font-size:10px;color:var(--ink3);font-weight:400">Reg: ' + d.fecha_registro + '</div>' : ''}
+        </td>
         <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${d.usuario}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:11px" onclick="event.stopPropagation()">
+          ${d.password ? '<div style="display:inline-flex;align-items:center;gap:4px"><span id="pwd-dist-' + d.id + '" data-pwd="' + d.password + '" style="letter-spacing:2px">••••••••</span><button type="button" onclick="_toggleVerPwdDist(\'' + d.id + '\')" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--ink3);padding:2px" title="Ver contraseña">👁</button></div>' : '<span style="color:var(--ink3);font-size:11px;font-style:italic">No registrada</span>'}
+        </td>
         <td>${d.municipio||'—'}</td>
         <td>${d.telefono||'—'}</td>
         <td style="font-size:12px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${d.direccion||''}">${d.direccion||'—'}</td>
         <td style="font-size:12px">${d.banco||'—'}</td>
         <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${d.cuenta||'—'}</td>
+        <td>
+          ${d.onboarding_completado ? '<span class="badge badge-green" title="Quiz: ' + (d.onboarding_quiz_score||5) + '/5 · Términos aceptados: ' + (d.terminos_aceptados_en ? new Date(d.terminos_aceptados_en).toLocaleDateString('es-CO') : 'Sí') + '">✓ Quiz ' + (d.onboarding_quiz_score||5) + '/5</span>' : '<span class="badge badge-gold" title="Aún no ha completado el quiz ni aceptado términos">⏳ Pendiente</span>'}
+        </td>
         <td>
           <div class="inline-actions">
             <button class="btn btn-xs btn-secondary" onclick="event.stopPropagation();editDist('${d.id}')">✏️</button>
@@ -8224,16 +8244,16 @@ async function renderDistribuidores() {
         </td>
       </tr>
       <tr id="dist-row-${d.id}" style="display:none">
-        <td colspan="8" style="padding:0;background:var(--bg2)">
+        <td colspan="10" style="padding:0;background:var(--bg2)">
           <div id="resumen-mes-${d.id}" style="padding:14px 20px;border-bottom:1px solid var(--border)"></div>
           <table style="width:100%;border-collapse:collapse;font-size:12px">
             <thead><tr style="background:var(--border)">
               <th style="padding:8px 20px;text-align:left">Pedido</th>
-              <th>Fecha</th><th>Total</th><th>Comisión</th><th>Estado pago</th><th>Recibido</th><th>Pago comisión</th><th></th>
+              <th>Fecha</th><th>Destino</th><th>Total</th><th>Comisión</th><th>Estado pago</th><th>Recibido</th><th>Pago comisión</th><th></th>
             </tr></thead>
             <tbody>${pedidosHTML}</tbody>
             <tfoot><tr style="background:var(--bg2)">
-              <td colspan="2" style="padding:8px 20px;font-weight:600">TOTAL (histórico)</td>
+              <td colspan="3" style="padding:8px 20px;font-weight:600">TOTAL (histórico)</td>
               <td style="font-weight:600">${fmt(total)}</td>
               <td style="font-weight:600;color:var(--sage)" title="Comisión vigente según ventas acumuladas de este mes: ${fmt(comMesActual.totalMes)}">${fmt(comMesActual.val)} (${comMesActual.pct}% · este mes)</td>
               <td colspan="4"></td>
@@ -8245,8 +8265,8 @@ async function renderDistribuidores() {
 
   el.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th>Nombre</th><th>Usuario</th><th>Municipio</th><th>Teléfono</th>
-      <th>Dirección</th><th>Banco</th><th>Cuenta/Llave</th><th></th>
+      <th>Nombre</th><th>Usuario</th><th>Contraseña</th><th>Municipio</th><th>Teléfono</th>
+      <th>Dirección</th><th>Banco</th><th>Cuenta/Llave</th><th>Inducción</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
@@ -8317,16 +8337,25 @@ async function confirmarPedidoDist(pedidoId, currentState) {
       id_producto: i.id, cantidad: i.cantidad,
       precio_unitario: i.precio, costo_unitario: i.costo||0, subtotal: i.subtotal
     }));
+    const subtotalProd = pedido.subtotal_productos != null ? pedido.subtotal_productos : (pedido.total - (pedido.flete||0));
     const venta = {
       id: pedidoId, num: pedido.num, fecha: pedido.fecha,
       id_cliente: idClienteVinculado, canal_venta: 'Distribuidora',
-      total_bruto: pedido.total, descuento: 0, costo_envio: 0,
-      subtotal_productos: pedido.total, costo_transporte: 0, transporte_pagado_por: '',
+      total_bruto: subtotalProd, descuento: 0, costo_envio: pedido.flete || 0,
+      subtotal_productos: subtotalProd, costo_transporte: 0,
+      transporte_pagado_por: pedido.flete ? 'cliente' : 'frescura',
       total_pagado: pedido.total, metodo_pago: pedido.metodo_pago||'No especificado',
       estado_pago: 'confirmado', estado_envio: 'preparando', cashback_generado: 0,
       costo_productos: items.reduce((a,i) => a+(i.costo_unitario*i.cantidad),0),
       dist_id: pedido.dist_id, dist_nombre: pedido.dist_nombre,
-      dist_consecutivo: pedido.dist_consecutivo
+      dist_consecutivo: pedido.dist_consecutivo,
+      tipo_destino: pedido.tipo_destino || 'distribuidora',
+      destinatario_nombre: pedido.destinatario_nombre || '',
+      destinatario_telefono: pedido.destinatario_telefono || '',
+      destinatario_ciudad: pedido.destinatario_ciudad || '',
+      destinatario_direccion: pedido.destinatario_direccion || '',
+      destinatario_notas: pedido.destinatario_notas || '',
+      flete: pedido.flete || 0
     };
     // Deduct stock
     items.forEach(det => {
@@ -8468,7 +8497,21 @@ async function previsualizarPedidoDist(pedidoId) {
   } catch(e) { alert('Error: ' + e.message); return; }
 
   const fmt2 = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:0}).format(n||0);
-  const com  = calcComision(pedido.total||0);
+  const subtotalProd = pedido.subtotal_productos != null ? pedido.subtotal_productos : (pedido.total - (pedido.flete||0));
+  const com  = calcComision(subtotalProd);
+  const esOtra = pedido.tipo_destino === 'cliente_otra_ciudad';
+  const destinoHTML = esOtra
+    ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px;margin:12px 0;font-size:12px">
+         <div style="font-weight:700;color:#1e40af;margin-bottom:6px">📦 DESPACHO DIRECTO A OTRA CIUDAD (CLIENTE FINAL):</div>
+         <div><b>Destinatario:</b> ${pedido.destinatario_nombre||'—'} · <b>Tel:</b> ${pedido.destinatario_telefono||'—'}</div>
+         <div><b>Ciudad / Municipio:</b> ${pedido.destinatario_ciudad||'—'}</div>
+         <div><b>Dirección de Entrega:</b> ${pedido.destinatario_direccion||'—'}</div>
+         ${pedido.destinatario_notas ? `<div><b>Indicaciones:</b> ${pedido.destinatario_notas}</div>` : ''}
+         <div style="margin-top:6px;font-size:11px;color:#92400e"><b>Flete nacional:</b> ${pedido.flete > 0 ? fmt2(pedido.flete) + ' (cobrado al cliente)' : '¡GRATIS! ($0)'} · <b>Base comisionable productos:</b> ${fmt2(subtotalProd)}</div>
+       </div>`
+    : `<div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;margin:12px 0;font-size:11.5px">
+         <b>🚚 Entrega a domicilio de la Distribuidora:</b> ${pedido.dist_nombre} (para distribución local).
+       </div>`;
   const itemsHTML = (pedido.items||[]).map(i =>
     `<tr><td style="padding:7px 12px;border-bottom:1px solid #e8e4dc">${i.nombre}</td>
      <td style="padding:7px 12px;border-bottom:1px solid #e8e4dc;text-align:center">${i.cantidad}</td>
@@ -8489,6 +8532,7 @@ th{background:#f5f2ed;padding:8px 12px;text-align:left;font-size:10px;text-trans
 .total-row{font-weight:700;background:#f5f2ed}
 .no-print{text-align:center;margin-top:20px}
 @media print{.no-print{display:none}}</style></head><body>
+${destinoHTML}
 <div class="header">
   <div><div style="font-size:20px;font-weight:700">Frescura Natural</div>
     <div style="font-size:10px;color:#8a847a;letter-spacing:2px;margin-top:2px">PEDIDO DISTRIBUIDOR</div></div>
@@ -8719,6 +8763,22 @@ function openModalNuevoDist() {
   openModal('modal-nuevo-dist');
 }
 
+
+function _toggleVerPwdDist(id) {
+  const el = document.getElementById('pwd-dist-' + id);
+  if (!el) return;
+  const isHidden = el.textContent === '••••••••';
+  if (isHidden) {
+    el.textContent = el.dataset.pwd || '';
+    el.style.letterSpacing = 'normal';
+    el.style.fontWeight = '600';
+  } else {
+    el.textContent = '••••••••';
+    el.style.letterSpacing = '2px';
+    el.style.fontWeight = 'normal';
+  }
+}
+
 async function editDist(id) {
   try {
     const snap = await _DIST_COL.doc(id).get();
@@ -8729,7 +8789,8 @@ async function editDist(id) {
     document.getElementById('dist-nombre').value    = d.nombre    || '';
     document.getElementById('dist-user').value      = d.usuario   || '';
     document.getElementById('dist-pass').value      = '';
-    document.getElementById('dist-pass').placeholder = '(no se puede ver ni cambiar aquí — ver nota en el formulario)';
+    document.getElementById('dist-pass').value = d.password || '';
+    document.getElementById('dist-pass').placeholder = d.password ? d.password : '(no registrada)';
     document.getElementById('dist-tel').value       = d.telefono  || '';
     document.getElementById('dist-municipio').value = d.municipio || '';
     document.getElementById('dist-direccion').value = d.direccion || '';
@@ -8780,6 +8841,7 @@ async function guardarDist() {
   const data = {
     nombre,
     usuario,
+    password,
     telefono:   document.getElementById('dist-tel').value.trim(),
     municipio:  document.getElementById('dist-municipio').value.trim(),
     direccion:  document.getElementById('dist-direccion').value.trim(),
@@ -8932,7 +8994,7 @@ async function renderDistPanel() {
   const conf  = ventas.filter(v => v.estado_pago === 'confirmado');
   const total = conf.reduce((a,v) => a + v.total_pagado, 0);
   const com   = calcComision(total);
-  const nextTier = total < 50000 ? {limite:50000,pct:5} : total < 75000 ? {limite:75000,pct:10} : total < 150000 ? {limite:150000,pct:15} : total < 300000 ? {limite:300000,pct:20} : null;
+  const nextTier = total < 70000 ? {limite:70000,pct:5} : total < 120000 ? {limite:120000,pct:9} : total < 200000 ? {limite:200000,pct:14} : total < 300000 ? {limite:300000,pct:20} : null;
 
   // Fetch commission payment status
   let comisionPagada = false;
@@ -8951,7 +9013,7 @@ async function renderDistPanel() {
     <div class="kpi-card" style="background:${com.pct>=20?'var(--sage-light)':com.pct>=10?'var(--blue-light)':com.pct>0?'var(--gold-light)':'var(--bg2)'}">
       <div class="kpi-label">Comisión Estimada</div>
       <div class="kpi-value" style="color:${com.pct>=20?'var(--sage)':com.pct>=10?'var(--blue)':com.pct>0?'var(--gold)':'var(--ink3)'}">${fmt(com.val)}</div>
-      <div class="kpi-sub">${com.pct > 0 ? com.pct+'% · Escala: 5%·10%·15%·20%' : 'Mín. $50.000 para comisión'}</div>
+      <div class="kpi-sub">${com.pct > 0 ? com.pct+'% · Escala: 5%·10%·15%·20%' : 'Mín. $70.000 para comisión'}</div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
         <span style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:4px;font-size:12px;font-weight:500;
           background:${comisionPagada?'var(--sage)':'var(--bg2)'};color:${comisionPagada?'#fff':'var(--ink3)'};border:1px solid ${comisionPagada?'var(--sage)':'var(--border)'}">
@@ -9038,6 +9100,7 @@ function saveVentaDist() {
     items.push({id:uid('DET'),id_venta:'',id_producto:p.id,cantidad:qty,precio_unitario:prUnit,costo_unitario:p.costo,subtotal:prUnit*qty});
   });
   if (!valid || items.length === 0) { if(valid) alert('Agrega al menos un producto'); return; }
+  if (totalBruto < 70000) { alert('El pedido mínimo para distribuidoras es de ' + fmt(70000)); return; }
 
   const consecutivo = getNextDistConsecutivo();
   const cid = document.getElementById('dv-cliente').value;
@@ -9339,7 +9402,9 @@ async function initApp() {
       hasNew = true;
       const n = document.createElement('div');
       n.style.cssText = 'position:fixed;top:20px;right:20px;background:#1e1c18;color:#f5f2ed;padding:14px 20px;border-radius:6px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);border-left:3px solid var(--gold);cursor:pointer;max-width:320px';
-      n.innerHTML = '🚚 Nuevo pedido pendiente de <strong>' + pedido.dist_nombre + '</strong><br><span style="font-size:11px;color:#8a847a">' + (pedido.num||'') + ' · ' + fmt(pedido.total) + ' · Confirmar en Distribuidores</span>';
+      const esOtra = pedido.tipo_destino === 'cliente_otra_ciudad';
+      const destTexto = esOtra ? (' · 🌎 ' + (pedido.destinatario_ciudad||'Otra ciudad') + ' (' + (pedido.destinatario_nombre||'Cliente') + ')') : ' · 🚚 Local';
+      n.innerHTML = '🚚 Nuevo pedido pendiente de <strong>' + pedido.dist_nombre + '</strong><br><span style="font-size:11px;color:#8a847a">' + (pedido.num||'') + ' · ' + fmt(pedido.total) + destTexto + '<br>Clic para confirmar en Distribuidores</span>';
       n.onclick = () => { nav('distribuidores'); n.remove(); };
       document.body.appendChild(n);
       setTimeout(() => { if (n.parentNode) n.remove(); }, 8000);
@@ -9350,6 +9415,43 @@ async function initApp() {
       if (activePage === 'distribuidores') renderDistribuidores();
     }
   }, err => console.warn('[onSnapshot pedidos_dist]', err.message));
+
+  // ── Real-time listener: new distributor accounts (notification) ──
+  _DIST_COL.onSnapshot(snapshot => {
+    let hasNew = false;
+    snapshot.docChanges().forEach(change => {
+      if (change.type !== 'added') return;
+      const dist = { id: change.doc.id, ...change.doc.data() };
+      const shownKey = 'fn_notif_dist_' + dist.id;
+      if (localStorage.getItem(shownKey)) return;
+      localStorage.setItem(shownKey, '1');
+
+      const creadoEn = dist.creado_en || (dist.onboarding_completado_en ? new Date(dist.onboarding_completado_en).getTime() : 0);
+      const esReciente = creadoEn && (Date.now() - creadoEn < 15 * 60 * 1000);
+
+      if (esReciente) {
+        hasNew = true;
+        try { playOrderSound(); } catch(e) {}
+        showAdminToast('🎉 ¡Nueva distribuidora registrada! ' + dist.nombre);
+
+        const n = document.createElement('div');
+        n.style.cssText = 'position:fixed;top:80px;right:20px;background:#1e1c18;color:#f5f2ed;padding:16px 20px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 8px 30px rgba(0,0,0,.35);border-left:4px solid var(--sage);cursor:pointer;max-width:340px';
+        n.innerHTML = '🎉 <strong>¡Nueva distribuidora registrada!</strong><br>' +
+          '<span style="font-size:14px;font-weight:600;color:#fff">' + dist.nombre + '</span><br>' +
+          '<span style="font-size:11px;color:#8a847a">Usuario: <b>' + dist.usuario + '</b>' + (dist.municipio ? ' · ' + dist.municipio : '') + '</span><br>' +
+          '<span style="font-size:10px;color:var(--sage);margin-top:6px;display:inline-block">Clic para ver en Distribuidores →</span>';
+        n.onclick = () => { nav('distribuidores'); n.remove(); };
+        document.body.appendChild(n);
+        setTimeout(() => { if (n.parentNode) n.remove(); }, 10000);
+      }
+    });
+
+    if (hasNew) {
+      const activePage = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || '';
+      if (activePage === 'distribuidores') renderDistribuidores();
+      else marcarNavDot('distribuidores');
+    }
+  }, err => console.warn('[onSnapshot distribuidores]', err.message));
 
   // ── Real-time: sync dist_recibido + estado_envio back into DB.ventas ──
   _db.collection('pedidos_dist').onSnapshot(snap => {
