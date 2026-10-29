@@ -7082,8 +7082,23 @@ async function cargarConfigComisiones() {
     const doc = await _db.collection('admin').doc('config_comisiones').get();
     if (doc.exists) {
       const d = doc.data();
-      if (d.tramos_comision) _configComisiones.tramos_comision = d.tramos_comision;
+      let migrado = false;
+      if (d.tramos_comision && Array.isArray(d.tramos_comision)) {
+        _configComisiones.tramos_comision = d.tramos_comision.map(t => {
+          if (t.monto === 60000) { migrado = true; return { ...t, monto: 70000 }; }
+          return { ...t };
+        });
+        if (_configComisiones.tramos_comision[1] && _configComisiones.tramos_comision[1].monto < 70000) {
+          _configComisiones.tramos_comision[1].monto = 70000;
+          migrado = true;
+        }
+      }
       if (d.valor_punto) _configComisiones.valor_punto = d.valor_punto;
+      if (migrado) {
+        _db.collection('admin').doc('config_comisiones').set(_configComisiones).catch(err => {
+          console.warn('[config_comisiones] error al auto-migrar Firestore a 70.000:', err);
+        });
+      }
     }
   } catch(e) { console.warn('[config_comisiones] usando valores por defecto:', e.message); }
 }
