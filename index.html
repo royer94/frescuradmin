@@ -932,11 +932,13 @@ html, body {
       <div class="page-toolbar">
         <input type="text" id="search-inv" class="search-input-mobile" placeholder="Buscar producto..." oninput="renderInventario()">
         <div class="btn-group-mobile">
+          <button class="btn btn-sm" style="background:#3a5a7a;color:#fff;border-color:#3a5a7a" onclick="openModalStockCali()">📍 Stock Cali</button>
           <button class="btn btn-secondary btn-sm" onclick="openModalMuestra()">🎁 Muestra</button>
           <button class="btn btn-secondary btn-sm" onclick="openModalAjuste()">± Ajuste</button>
           <button class="btn btn-primary btn-sm hide-mobile" onclick="openModalEntrada()">+ Entrada</button>
         </div>
       </div>
+      <div id="inv-cali-summary" class="mb-16"></div>
       <div id="inv-alerts" class="mb-16"></div>
       <div class="card"><div class="card-header"><span class="card-title">Inventario Actual</span><span id="inv-valor-total" class="text-sm text-muted"></span></div><div class="table-wrap" id="inventario-table"></div></div>
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">Historial de Movimientos</span></div><div class="table-wrap" id="movimientos-table"></div></div>
@@ -1295,7 +1297,21 @@ html, body {
         <input type="hidden" id="v-cliente" value="">
         <div id="v-cliente-dropdown" style="display:none;position:absolute;z-index:80;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);max-height:200px;overflow-y:auto;width:100%;box-shadow:0 4px 16px rgba(0,0,0,.12);margin-top:2px"></div>
       </div>
-      <div class="form-group"><label>Productos</label><div id="venta-items"></div><button class="btn btn-secondary btn-sm" onclick="addVentaItem()" style="margin-top:8px">+ Agregar producto</button></div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Origen del Inventario (¿De dónde sale el producto?)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label id="lbl-origen-principal" style="flex:1;min-width:155px;display:flex;align-items:center;gap:8px;padding:9px 12px;border:1.5px solid var(--sage);background:var(--sage-light);border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:600;margin:0" onclick="cambiarOrigenStockVenta('principal')">
+            <input type="radio" name="v-origen-stock" id="v-origen-principal" value="principal" checked style="width:auto;margin:0">
+            <span>🏠 Bodega Principal</span>
+          </label>
+          <label id="lbl-origen-cali" style="flex:1;min-width:155px;display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--border);background:var(--bg2);border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:500;margin:0" onclick="cambiarOrigenStockVenta('cali')">
+            <input type="radio" name="v-origen-stock" id="v-origen-cali" value="cali" style="width:auto;margin:0">
+            <span>📍 Stock Cali</span>
+            <span id="v-origen-cali-badge" style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:10px;background:#3a5a7a;color:#fff;font-weight:600">0 uds</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group"><label id="lbl-venta-productos">Productos</label><div id="venta-items"></div><button class="btn btn-secondary btn-sm" onclick="addVentaItem()" style="margin-top:8px">+ Agregar producto</button></div>
       <div class="form-row-3">
         <div class="form-group"><label>Costo real del transporte (COP)</label><input type="number" id="v-envio" value="0" oninput="calcTotalVenta()"></div>
         <div class="form-group"><label>Cobrado al cliente (COP)</label><input type="number" id="v-envio-cobrado" value="0" placeholder="Auto" oninput="onEnvioCobradoInput()"></div>
@@ -1675,6 +1691,69 @@ html, body {
       <div class="form-group"><label>Motivo</label><input type="text" id="aj-nota"></div>
     </div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-ajuste')">Cancelar</button><button class="btn btn-danger" onclick="saveAjuste()">Aplicar Ajuste</button></div>
+  </div>
+</div>
+
+<!-- MODAL: STOCK CALI (BODEGA SATÉLITE) -->
+<div class="modal-overlay" id="modal-stock-cali">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">📍 Gestionar Stock en Cali</span>
+      <button class="modal-close" onclick="closeModal('modal-stock-cali')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-strip alert-info" style="margin-bottom:14px;font-size:12px;line-height:1.5">
+        ℹ️ Las unidades que envías a Cali se descuentan de tu <b>Bodega Principal</b> y quedan disponibles bajo <b>📍 Stock Cali</b> para registrar ventas allá sin confundir tu inventario local.
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Operación</label>
+          <select id="sc-tipo" onchange="onCambioTipoStockCali()">
+            <option value="enviar">📤 Enviar de Bodega Principal → Cali</option>
+            <option value="devolver">📥 Devolver de Cali → Bodega Principal</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fecha</label>
+          <input type="date" id="sc-fecha">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label id="sc-items-label">Productos a enviar a Cali</label>
+        <div id="sc-items-list"></div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addStockCaliItem()" style="margin-top:8px">+ Agregar otro producto</button>
+      </div>
+
+      <div id="sc-flete-zone" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:14px">
+        <div class="form-row" style="margin-bottom:6px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Costo envío de la caja a Cali (COP · opcional)</label>
+            <input type="number" id="sc-costo-envio" value="0" min="0" placeholder="Ej: 18000">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Nota / Transportadora / Guía</label>
+            <input type="text" id="sc-nota" placeholder="Ej: Caja enviada a Cali por Interrapidísimo">
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:400;cursor:pointer;margin-top:6px;color:var(--ink2)">
+          <input type="checkbox" id="sc-registrar-gasto" checked style="width:auto;margin:0">
+          <span>Si ingreso un costo de envío mayor a $0, registrarlo automáticamente en <b>Gastos (Transporte / Envíos)</b></span>
+        </label>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:700;color:#3a5a7a;text-transform:uppercase;letter-spacing:.5px">📍 Inventario actual en Cali</span>
+          <span id="sc-resumen-modal-totales" style="font-size:12px;color:var(--ink3)"></span>
+        </div>
+        <div id="sc-actual-table" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-stock-cali')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-stock-cali" style="background:#3a5a7a;border-color:#3a5a7a" onclick="saveStockCali()">📍 Guardar Movimiento Cali</button>
+    </div>
   </div>
 </div>
 
@@ -3036,6 +3115,7 @@ function renderVentas() {
     };
     const pagoBadge = `<span class="badge ${stPago === 'confirmado' ? 'badge-green' : 'badge-gold'}">${stPago}</span>`;
     const distBadge = v.dist_id ? (v.dist_recibido ? '<span style="font-size:10px;background:#e8f0e8;color:#5a7a5c;padding:2px 6px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:10px;color:var(--ink3);background:var(--bg2);padding:2px 6px;border-radius:3px">En espera</span>') : '';
+    const caliBadge = v.origen_stock === 'cali' ? '<span class="badge" style="background:#e8eff5;color:#3a5a7a;font-size:10px">📍 Cali</span>' : '';
 
     return `
       <div class="mobile-record-card">
@@ -3043,6 +3123,7 @@ function renderVentas() {
           <span class="mrc-id text-mono">${v.id}</span>
           <span class="mrc-date">${v.fecha}</span>
           <span class="badge badge-blue" style="margin-left:auto">${v.canal_venta || 'Venta'}</span>
+          ${caliBadge}
         </div>
         <div class="mrc-body">
           <div class="mrc-title">${escapeHtml(c?.nombre || 'Cliente sin nombre')}</div>
@@ -3071,7 +3152,8 @@ function renderVentas() {
     <div class="table-desktop-wrap hide-mobile">
       <table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Venta</th><th>Margen</th><th>Cashback</th><th>Pago</th><th>Recibido</th><th>Envío</th><th></th></tr></thead><tbody>
       ${ventasPage.map(v=>{const c=getCliente(v.id_cliente);const _vn=ventaNeta(v);const m=_vn>0?(_vn-(v.costo_productos||0))/_vn*100:0;const cb=v.cashback_generado||0;
-      return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span></td><td class="fw-600">${htmlVentaFila(v)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
+      const caliPill = v.origen_stock === 'cali' ? ' <span class="badge" style="background:#e8eff5;color:#3a5a7a;font-size:10px" title="Descontado de Stock Cali">📍 Cali</span>' : '';
+      return`<tr><td class="text-mono text-sm">${v.id}</td><td>${v.fecha}</td><td>${c?.nombre||'—'}</td><td><span class="badge badge-blue">${v.canal_venta}</span>${caliPill}</td><td class="fw-600">${htmlVentaFila(v)}</td><td class="${m>=50?'color-sage':'color-red'}">${m.toFixed(0)}%</td><td>${cb>0?`<span class="cashback-pill">+${fmt(cb)}</span>`:'—'}</td><td><span class="badge ${v.estado_pago==='confirmado'?'badge-green':'badge-gold'}">${v.estado_pago}</span></td><td>${v.dist_id ? (v.dist_recibido ? '<span style="font-size:11px;background:#e8f0e8;color:#5a7a5c;padding:2px 7px;border-radius:3px">✓ Recibido</span>' : '<span style="font-size:11px;color:var(--ink3)">En espera</span>') : '—'}</td><td>${{preparando:'<span class="badge badge-gold">📦 Preparando</span>',enviado:'<span class="badge badge-blue">🚚 Enviado</span>',entregado:'<span class="badge badge-green">✅ Entregado</span>',cancelado:'<span class="badge badge-red">❌ Cancelado</span>'}[v.estado_envio||'preparando']||'—'}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editVenta('${v.id}')" title="Editar venta">✏️</button><button class="btn btn-xs ${{preparando:'btn-gold',enviado:'btn-secondary',entregado:'btn-secondary',cancelado:'btn-danger'}[v.estado_envio||'preparando']}" onclick="cycleEnvio('${v.id}')" title="Cambiar estado envío">${{preparando:'📦',enviado:'🚚',entregado:'✅',cancelado:'❌'}[v.estado_envio||'preparando']}</button>${v.estado_pago==='confirmado'?`<button class="btn btn-xs btn-secondary" onclick="generarFactura('${v.id}')" title="Generar comprobante">🧾</button>`:''}<button class="btn btn-xs btn-danger" onclick="deleteVenta('${v.id}')">🗑</button></div></td></tr>`}).join('')}
       </tbody></table>
     </div>
     <div class="mobile-record-list hide-desktop">
@@ -3152,6 +3234,7 @@ function editVenta(id){
   document.getElementById('v-transportadora').value=v.transportadora||'';
   document.getElementById('v-guia').value=v.numero_guia||'';
   toggleCamposEnvio();
+  cambiarOrigenStockVenta(v.origen_stock === 'cali' ? 'cali' : 'principal');
   document.querySelectorAll('#v-pago-checks input').forEach(cb=>cb.checked=false);
   if(v.metodo_pago){v.metodo_pago.split(' + ').forEach(m=>{const cb=document.querySelector('#v-pago-checks input[value="'+m+'"]');if(cb)cb.checked=true;});}
   const selCli=document.getElementById('v-cliente');
@@ -3188,22 +3271,53 @@ function editVenta(id){
 function updateVenta(id){
   const v=DB.ventas.find(x=>x.id===id); if(!v)return;
   const prevEstadoEnvio = v.estado_envio;
-  getVentaDetalle(id).forEach(d=>{const p=getProducto(d.id_producto);if(p)p.stock+=d.cantidad;});
-  DB.detalle_ventas=DB.detalle_ventas.filter(d=>d.id_venta!==id);
-  if(v.cashback_generado&&v.id_cliente){const c=getCliente(v.id_cliente);if(c)c.cashback=Math.max(0,(c.cashback||0)-v.cashback_generado);}
+  const prevOrigen = v.origen_stock === 'cali' ? 'cali' : 'principal';
+  const prevDetails = getVentaDetalle(id);
+  const nuevoOrigen = document.querySelector('input[name="v-origen-stock"]:checked')?.value || 'principal';
+
+  // Restaurar temporalmente el stock anterior para validar con precisión
+  prevDetails.forEach(d=>{
+    const p=getProducto(d.id_producto);
+    if(p){
+      if(prevOrigen==='cali') p.stock_cali=(p.stock_cali||0)+d.cantidad;
+      else p.stock+=d.cantidad;
+    }
+  });
+
+  const revertTempStock = () => {
+    prevDetails.forEach(d=>{
+      const p=getProducto(d.id_producto);
+      if(p){
+        if(prevOrigen==='cali') p.stock_cali=Math.max(0,(p.stock_cali||0)-d.cantidad);
+        else p.stock=Math.max(0,p.stock-d.cantidad);
+      }
+    });
+  };
+
   const items=[];let totalBruto=0,costoProd=0,valid=true;
   const fechaVenta=document.getElementById('v-fecha').value||v.fecha;
   document.querySelectorAll('#venta-items .form-row').forEach(row=>{
     const prod=row.querySelector('.vi-prod');const qty=parseInt(row.querySelector('.vi-qty')?.value)||0;
     if(!prod?.value||qty<=0){valid=false;return;}
     const p=getProducto(prod.value);if(!p)return;
-    if(p.stock<qty){alert('Stock insuficiente: '+p.nombre+' ('+p.stock+' disponibles)');valid=false;return;}
+    const disp = nuevoOrigen === 'cali' ? (p.stock_cali || 0) : p.stock;
+    if(disp<qty){
+      alert(`Stock insuficiente en ${nuevoOrigen==='cali'?'📍 Stock Cali':'Bodega Principal'}: ${p.nombre} (${disp} disponibles)`);
+      valid=false;return;
+    }
     const frozen=row.querySelector('.vi-precio-frozen')?.value;
     const precio=(frozen!==''&&frozen!=null)?parseFloat(frozen):precioEnFecha(p, fechaVenta);
     totalBruto+=precio*qty;costoProd+=p.costo*qty;
     items.push({id:uid('DET'),id_venta:id,id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:p.costo,subtotal:precio*qty});
   });
-  if(!valid||items.length===0){if(valid)alert('Agrega al menos un producto');return;}
+  if(!valid||items.length===0){
+    revertTempStock();
+    if(valid)alert('Agrega al menos un producto');
+    return;
+  }
+
+  DB.detalle_ventas=DB.detalle_ventas.filter(d=>d.id_venta!==id);
+  if(v.cashback_generado&&v.id_cliente){const c=getCliente(v.id_cliente);if(c)c.cashback=Math.max(0,(c.cashback||0)-v.cashback_generado);}
   calcTotalVenta();
   const envio=parseFloat(document.getElementById('v-envio').value)||0;
   const _tr=calcTransporteVenta(envio, parseFloat(document.getElementById('v-envio-cobrado').value)||0);
@@ -3215,6 +3329,7 @@ function updateVenta(id){
   v.fecha=document.getElementById('v-fecha').value;
   v.id_cliente=cid;
   v.canal_venta=document.getElementById('v-canal').value;
+  v.origen_stock=nuevoOrigen;
   v.total_bruto=totalBruto;
   v.descuento=desc;
   v.costo_envio=envioCobrado;
@@ -3232,15 +3347,20 @@ function updateVenta(id){
   v.cashback_generado=cb;
   if(cb>0&&cid&&v.estado_pago==='confirmado'){const c=getCliente(cid);if(c)c.cashback=(c.cashback||0)+cb;}
   if(cid){const c=getCliente(cid);if(c)c.total_historico=DB.ventas.filter(x=>x.id_cliente===cid&&x.estado_pago==='confirmado').reduce((a,x)=>a+x.total_pagado,0);}
-  DB.movimientos=DB.movimientos.filter(m=>m.referencia!==id||m.tipo!=='venta');
+  DB.movimientos=DB.movimientos.filter(m=>m.referencia!==id||(m.tipo!=='venta'&&m.tipo!=='venta_cali'));
   items.forEach(d=>{
     const p=getProducto(d.id_producto);
-    if(p){p.stock-=d.cantidad;DB.movimientos.push({id:uid('MOV'),fecha:v.fecha,id_producto:p.id,tipo:'venta',cantidad:-d.cantidad,costo_unitario:d.costo_unitario,referencia:id,nota:'Venta '+id+' (editada)'});}
+    if(p){
+      if(nuevoOrigen==='cali') p.stock_cali=Math.max(0,(p.stock_cali||0)-d.cantidad);
+      else p.stock-=d.cantidad;
+      DB.movimientos.push({id:uid('MOV'),fecha:v.fecha,id_producto:p.id,tipo:nuevoOrigen==='cali'?'venta_cali':'venta',cantidad:-d.cantidad,costo_unitario:d.costo_unitario,referencia:id,nota:'Venta '+id+(nuevoOrigen==='cali'?' (📍 Stock Cali · editada)':' (editada)')});
+    }
   });
   DB.detalle_ventas.push(...items);
   sincronizarGastoTransporte(v);
   saveDB();
   syncVentaToFirestore(v, items).catch(e=>console.warn('[syncVenta edit]',e.message));
+  items.forEach(d=>{const p=getProducto(d.id_producto);if(p)syncProductoToFirestore(p).catch(()=>{});});
   closeModal('modal-venta');
   if (v.dist_id) {
     _db.collection('pedidos_dist').doc(id).update({estado_envio:v.estado_envio, transportadora:v.transportadora, numero_guia:v.numero_guia})
@@ -3275,9 +3395,17 @@ function deleteVenta(id) {
   if(!confirm('¿Eliminar esta venta?'))return;
   if(v){
     if(v.cashback_generado&&v.id_cliente){const c=getCliente(v.id_cliente);if(c)c.cashback=Math.max(0,(c.cashback||0)-v.cashback_generado);}
-    getVentaDetalle(id).forEach(d=>{const p=getProducto(d.id_producto);if(p)p.stock+=d.cantidad;});
+    const orig = v.origen_stock === 'cali' ? 'cali' : 'principal';
+    getVentaDetalle(id).forEach(d=>{
+      const p=getProducto(d.id_producto);
+      if(p){
+        if(orig==='cali') p.stock_cali=(p.stock_cali||0)+d.cantidad;
+        else p.stock+=d.cantidad;
+        syncProductoToFirestore(p).catch(()=>{});
+      }
+    });
     DB.detalle_ventas=DB.detalle_ventas.filter(d=>d.id_venta!==id);
-    DB.movimientos=DB.movimientos.filter(m=>m.referencia!==id||m.tipo!=='venta'); // limpia también el historial de movimientos
+    DB.movimientos=DB.movimientos.filter(m=>m.referencia!==id||(m.tipo!=='venta'&&m.tipo!=='venta_cali')); // limpia también el historial de movimientos
     DB.ventas=DB.ventas.filter(x=>x.id!==id);
     DB.gastos=DB.gastos.filter(g=>!(g.id_venta===id&&g.categoria===CAT_GASTO_LOGISTICA)); // elimina el gasto de transporte ligado
     saveDB();
@@ -4200,18 +4328,57 @@ function renderInventario() {
   const q=document.getElementById('search-inv')?.value.toLowerCase()||'';
   const bajo=DB.productos.filter(p=>p.stock<=p.stock_min&&p.activo);
   document.getElementById('inv-alerts').innerHTML=bajo.map(p=>`<div class="alert-strip alert-${p.stock===0?'danger':'warning'}">${p.stock===0?'🚨':'⚠'} <strong>${p.nombre}</strong>: ${p.stock===0?'SIN STOCK':'Stock bajo'} (${p.stock}/${p.stock_min})</div>`).join('');
+
+  // Resumen de Stock en Cali
+  const prodsEnCali = DB.productos.filter(p => (p.stock_cali || 0) > 0);
+  const totalUdsCali = prodsEnCali.reduce((a, p) => a + (p.stock_cali || 0), 0);
+  const valorCostoCali = prodsEnCali.reduce((a, p) => a + (p.costo || 0) * (p.stock_cali || 0), 0);
+  const valorVentaCali = prodsEnCali.reduce((a, p) => a + (p.precio || 0) * (p.stock_cali || 0), 0);
+  const caliSummaryEl = document.getElementById('inv-cali-summary');
+  if (caliSummaryEl) {
+    if (totalUdsCali > 0) {
+      caliSummaryEl.innerHTML = `
+        <div class="card" style="border:1.5px solid #3a5a7a;background:linear-gradient(180deg,rgba(58,90,122,0.06),rgba(58,90,122,0.02));margin-bottom:0">
+          <div class="card-body" style="padding:14px 16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+              <div>
+                <div style="font-weight:700;font-size:14px;color:#3a5a7a;display:flex;align-items:center;gap:6px">
+                  <span>📍 Stock disponible en Cali</span>
+                  <span class="badge badge-blue">${totalUdsCali} uds en ${prodsEnCali.length} prod.</span>
+                </div>
+                <div style="font-size:12px;color:var(--ink2);margin-top:2px">
+                  Valor a precio de venta: <strong style="color:var(--sage)">${fmt(valorVentaCali)}</strong> · Costo mercancía: <strong>${fmt(valorCostoCali)}</strong>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-xs btn-secondary" onclick="openModalStockCali()">📦 Enviar / Mover Stock</button>
+                <button class="btn btn-xs btn-primary" style="background:#3a5a7a;border-color:#3a5a7a" onclick="openModalVentaDesdeCali()">🛒 Registrar Venta Cali</button>
+              </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              ${prodsEnCali.map(p => `<span style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:4px 10px;font-size:12px;display:inline-flex;align-items:center;gap:6px"><span>${p.nombre}</span><strong style="color:#3a5a7a;background:#e8eff5;padding:1px 6px;border-radius:10px;font-size:11px">${p.stock_cali}</strong></span>`).join('')}
+            </div>
+          </div>
+        </div>`;
+    } else {
+      caliSummaryEl.innerHTML = '';
+    }
+  }
+
   let prods=DB.productos.filter(p=>p.activo);
   if(q)prods=prods.filter(p=>p.nombre.toLowerCase().includes(q)||p.categoria.toLowerCase().includes(q));
   const valorTotal=prods.reduce((a,p)=>a+p.costo*p.stock,0);
-  document.getElementById('inv-valor-total').textContent=`Valor en stock: ${fmt(valorTotal)}`;
-  document.getElementById('inventario-table').innerHTML=`<table><thead><tr><th>ID</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>Mín.</th><th>Estado</th><th>Costo</th><th>Valor Stock</th></tr></thead><tbody>
+  document.getElementById('inv-valor-total').textContent=`Valor bodega principal: ${fmt(valorTotal)}${valorCostoCali>0 ? ' · En Cali: ' + fmt(valorCostoCali) : ''}`;
+  document.getElementById('inventario-table').innerHTML=`<table><thead><tr><th>ID</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>📍 Cali</th><th>Mín.</th><th>Estado</th><th>Costo</th><th>Valor Stock</th></tr></thead><tbody>
     ${prods.map(p=>{const e=p.stock===0?['badge-red','Sin Stock']:p.stock<=p.stock_min?['badge-gold','Bajo']:['badge-green','OK'];
-    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}${p.tiene_descuento?'<span class="badge badge-purple" style="margin-left:6px;font-size:9px">DESC</span>':''}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td class="fw-600 ${p.stock<=p.stock_min?'color-red':''}">${p.stock}</td><td class="text-muted">${p.stock_min}</td><td><span class="badge ${e[0]}">${e[1]}</span></td><td>${fmt(p.costo)}</td><td>${fmt(p.costo*p.stock)}</td></tr>`;}).join('')}
+    const sc = p.stock_cali || 0;
+    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}${p.tiene_descuento?'<span class="badge badge-purple" style="margin-left:6px;font-size:9px">DESC</span>':''}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td class="fw-600 ${p.stock<=p.stock_min?'color-red':''}">${p.stock}</td><td>${sc>0?`<span class="badge badge-blue" title="Unidades en Cali">📍 ${sc}</span>`:'<span class="text-muted">—</span>'}</td><td class="text-muted">${p.stock_min}</td><td><span class="badge ${e[0]}">${e[1]}</span></td><td>${fmt(p.costo)}</td><td>${fmt(p.costo*p.stock)}</td></tr>`;}).join('')}
   </tbody></table>`;
   const movs=[...DB.movimientos].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,40);
-  const tipoColor={entrada:'badge-green',venta:'badge-blue',merma:'badge-red',muestra:'badge-terra',obsequio:'badge-terra',influencer:'badge-purple',ajuste:'badge-gold'};
+  const tipoColor={entrada:'badge-green',venta:'badge-blue',venta_cali:'badge-blue',traslado_cali:'badge-purple',retorno_cali:'badge-green',merma:'badge-red',muestra:'badge-terra',obsequio:'badge-terra',influencer:'badge-purple',ajuste:'badge-gold'};
+  const tipoLabel={traslado_cali:'📍 envío a Cali',retorno_cali:'↩️ retorno Cali',venta_cali:'📍 venta Cali'};
   document.getElementById('movimientos-table').innerHTML=movs.length===0?'<div class="empty"><p>Sin movimientos</p></div>':`<table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Nota</th></tr></thead><tbody>
-    ${movs.map(m=>{const p=getProducto(m.id_producto);return`<tr><td>${m.fecha}</td><td>${p?.nombre||m.id_producto}</td><td><span class="badge ${tipoColor[m.tipo]||'badge-gray'}">${m.tipo}</span></td><td class="${m.cantidad>0?'color-sage':'color-red'}">${m.cantidad>0?'+':''}${m.cantidad}</td><td class="text-muted">${m.nota||'—'}</td></tr>`}).join('')}
+    ${movs.map(m=>{const p=getProducto(m.id_producto);return`<tr><td>${m.fecha}</td><td>${p?.nombre||m.id_producto}</td><td><span class="badge ${tipoColor[m.tipo]||'badge-gray'}">${tipoLabel[m.tipo]||m.tipo}</span></td><td class="${m.cantidad>0?'color-sage':'color-red'}">${m.cantidad>0?'+':''}${m.cantidad}</td><td class="text-muted">${m.nota||'—'}</td></tr>`}).join('')}
   </tbody></table>`;
 }
 
@@ -5214,6 +5381,38 @@ function printReport(){
 // ══════════════════════════════════════════════════════════
 // MODALS — VENTA
 // ══════════════════════════════════════════════════════════
+function cambiarOrigenStockVenta(origen) {
+  const esCali = origen === 'cali';
+  const rPrin = document.getElementById('v-origen-principal');
+  const rCali = document.getElementById('v-origen-cali');
+  if (rPrin) rPrin.checked = !esCali;
+  if (rCali) rCali.checked = esCali;
+
+  const lblPrin = document.getElementById('lbl-origen-principal');
+  const lblCali = document.getElementById('lbl-origen-cali');
+  if (lblPrin) {
+    lblPrin.style.border = !esCali ? '1.5px solid var(--sage)' : '1px solid var(--border)';
+    lblPrin.style.background = !esCali ? 'var(--sage-light)' : 'var(--bg2)';
+    lblPrin.style.fontWeight = !esCali ? '600' : '500';
+  }
+  if (lblCali) {
+    lblCali.style.border = esCali ? '1.5px solid #3a5a7a' : '1px solid var(--border)';
+    lblCali.style.background = esCali ? '#e8eff5' : 'var(--bg2)';
+    lblCali.style.fontWeight = esCali ? '600' : '500';
+  }
+  const badgeCali = document.getElementById('v-origen-cali-badge');
+  if (badgeCali && DB?.productos) {
+    const udsCali = DB.productos.reduce((a, p) => a + (p.stock_cali || 0), 0);
+    badgeCali.textContent = udsCali + ' uds';
+  }
+  const lblProd = document.getElementById('lbl-venta-productos');
+  if (lblProd) {
+    lblProd.innerHTML = esCali
+      ? 'Productos <span style="color:#3a5a7a;font-weight:600;font-size:11px">(📍 Se descontarán del Stock en Cali)</span>'
+      : 'Productos';
+  }
+}
+
 function openModalVenta(){
   document.getElementById('v-edit-id').value='';
   document.getElementById('modal-venta-title').textContent='Registrar Venta';
@@ -5221,6 +5420,7 @@ function openModalVenta(){
   document.getElementById('v-transportadora').value='';
   document.getElementById('v-guia').value='';
   toggleCamposEnvio();
+  cambiarOrigenStockVenta('principal');
   document.getElementById('btn-guardar-venta').textContent='Guardar Venta';
   document.getElementById('v-fecha').value=today();
   document.getElementById('v-envio').value=0;
@@ -5237,6 +5437,11 @@ function openModalVenta(){
   calcTotalVenta();
   document.getElementById('cashback-aplicar-zone').style.display='none';
   openModal('modal-venta');
+}
+
+function openModalVentaDesdeCali(){
+  openModalVenta();
+  cambiarOrigenStockVenta('cali');
 }
 
 document.addEventListener('change',e=>{
@@ -5312,16 +5517,23 @@ function filtrarProductosVenta(input){
   const row = input.closest('.form-row');
   const dd = row.querySelector('.vi-prod-dropdown');
   const txt = (input.value||'').trim().toLowerCase();
-  const activos = DB.productos.filter(p=>p.activo&&p.stock>0);
+  const origen = document.querySelector('input[name="v-origen-stock"]:checked')?.value || 'principal';
+  const esCali = origen === 'cali';
+  const activos = DB.productos.filter(p => p.activo && (esCali ? (p.stock_cali || 0) > 0 : p.stock > 0));
   const matches = txt ? activos.filter(p=>p.nombre.toLowerCase().includes(txt)).slice(0,10) : activos.slice(0,10);
   const fVenta = document.getElementById('v-fecha')?.value || today();
   let html = matches.map(p=>{
     const enP = productoEnPromoEnFecha(p, fVenta);
     const prEf = precioEnFecha(p, fVenta);
     const tagP = enP ? ` [OFERTA Ahora ${fmt(prEf)}]` : (p.tiene_descuento ? ' [DESC]' : '');
-    return `<div onmousedown="seleccionarProductoVenta(this,'${p.id}','${p.nombre.replace(/'/g,"\\'")} (${fmt(prEf)})${tagP}')" style="padding:8px 12px;cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">${p.nombre} ${enP?`<span style="text-decoration:line-through;color:var(--ink3);font-size:11px">${fmt(p.precio)}</span> <strong style="color:var(--gold);font-size:12px">Ahora ${fmt(prEf)}</strong>`:`<span style="color:var(--ink3);font-size:12px">(${fmt(p.precio)})</span>`}${(p.tiene_descuento||enP)?' <span style="color:var(--gold);font-size:11px">🏷️</span>':''}</div>`;
+    const stockBadge = esCali
+      ? `<span style="color:#3a5a7a;font-size:11px;font-weight:600;margin-left:4px">[📍 ${p.stock_cali} en Cali]</span>`
+      : `<span style="color:var(--ink3);font-size:11px;margin-left:4px">[${p.stock} disp.]</span>`;
+    return `<div onmousedown="seleccionarProductoVenta(this,'${p.id}','${p.nombre.replace(/'/g,"\\'")} (${fmt(prEf)})${tagP}')" style="padding:8px 12px;cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">${p.nombre} ${enP?`<span style="text-decoration:line-through;color:var(--ink3);font-size:11px">${fmt(p.precio)}</span> <strong style="color:var(--gold);font-size:12px">Ahora ${fmt(prEf)}</strong>`:`<span style="color:var(--ink3);font-size:12px">(${fmt(p.precio)})</span>`}${stockBadge}${(p.tiene_descuento||enP)?' <span style="color:var(--gold);font-size:11px">🏷️</span>':''}</div>`;
   }).join('');
-  if (!matches.length) html = '<div style="padding:8px 12px;font-size:12px;color:var(--ink3);font-style:italic">Sin resultados</div>';
+  if (!matches.length) {
+    html = `<div style="padding:8px 12px;font-size:12px;color:var(--ink3);font-style:italic">${esCali ? 'No hay productos con stock disponible en Cali' : 'Sin resultados'}</div>`;
+  }
   dd.innerHTML = html;
   dd.style.display = 'block';
 }
@@ -5407,11 +5619,17 @@ function calcTotalVenta(){
 function saveVenta(){
   const items=[];let totalBruto=0,costoProd=0,valid=true;
   const fechaVenta=document.getElementById('v-fecha').value||today();
+  const origenStock=document.querySelector('input[name="v-origen-stock"]:checked')?.value || 'principal';
+  const esCali = origenStock === 'cali';
   document.querySelectorAll('#venta-items .form-row').forEach(row=>{
     const prod=row.querySelector('.vi-prod');const qty=parseInt(row.querySelector('.vi-qty')?.value)||0;
     if(!prod?.value||qty<=0){valid=false;return;}
     const p=getProducto(prod.value);if(!p)return;
-    if(p.stock<qty){alert(`Stock insuficiente: ${p.nombre} (${p.stock} disponibles)`);valid=false;return;}
+    const disp = esCali ? (p.stock_cali || 0) : p.stock;
+    if(disp<qty){
+      alert(`Stock insuficiente en ${esCali ? '📍 Stock Cali' : 'Bodega Principal'}: ${p.nombre} (${disp} disponibles)`);
+      valid=false;return;
+    }
     const precio=precioEnFecha(p, fechaVenta);
     totalBruto+=precio*qty;costoProd+=p.costo*qty;
     items.push({id:uid('DET'),id_venta:'',id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:p.costo,subtotal:precio*qty});
@@ -5426,14 +5644,30 @@ function saveVenta(){
   const cid=document.getElementById('v-cliente').value;
   const vid=uid('VTA');
   items.forEach(i=>i.id_venta=vid);
-  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,total_bruto:totalBruto,descuento:desc,costo_envio:envioCobrado,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:_por,total_pagado:totalBruto+envioCobrado-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
+  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,origen_stock:origenStock,total_bruto:totalBruto,descuento:desc,costo_envio:envioCobrado,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:_por,total_pagado:totalBruto+envioCobrado-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
   const cb=calcCashback(cid, desc, items);
   venta.cashback_generado=cb;
   // Apply cashback discount if used
   if(desc>0&&cid){const c=getCliente(cid);if(c&&c.cashback>=desc)c.cashback=Math.max(0,c.cashback-desc);}
   // Add cashback earned
   if(cb>0&&cid&&venta.estado_pago==='confirmado'){const c=getCliente(cid);if(c)c.cashback=(c.cashback||0)+cb;}
-  items.forEach(d=>{const p=getProducto(d.id_producto);if(p){p.stock-=d.cantidad;DB.movimientos.push({id:uid('MOV'),fecha:venta.fecha,id_producto:p.id,tipo:'venta',cantidad:-d.cantidad,costo_unitario:d.costo_unitario,referencia:vid,nota:`Venta ${vid}`});}});
+  items.forEach(d=>{
+    const p=getProducto(d.id_producto);
+    if(p){
+      if(esCali) p.stock_cali = Math.max(0, (p.stock_cali || 0) - d.cantidad);
+      else p.stock -= d.cantidad;
+      DB.movimientos.push({
+        id:uid('MOV'),
+        fecha:venta.fecha,
+        id_producto:p.id,
+        tipo: esCali ? 'venta_cali' : 'venta',
+        cantidad:-d.cantidad,
+        costo_unitario:d.costo_unitario,
+        referencia:vid,
+        nota: esCali ? `Venta ${vid} (📍 Stock Cali)` : `Venta ${vid}`
+      });
+    }
+  });
   if(cid){const c=getCliente(cid);if(c)c.total_historico=(c.total_historico||0)+venta.total_pagado;}
   DB.ventas.push(venta);DB.detalle_ventas.push(...items);
   sincronizarGastoTransporte(venta);
@@ -5509,9 +5743,15 @@ async function guardarDevolucion(){
   const monto = items.reduce((a,i)=>a+i.cantidad*i.precio_unitario,0);
 
   // Restore stock
+  const devCali = v.origen_stock === 'cali';
   items.forEach(i=>{
     const p=getProducto(i.id_producto);
-    if(p){ p.stock+=i.cantidad; DB.movimientos.push({id:uid('MOV'),fecha:today(),id_producto:p.id,tipo:'ajuste',cantidad:i.cantidad,costo_unitario:p.costo,referencia:ventaId,nota:'Devolución venta '+ventaId}); }
+    if(p){
+      if (devCali) p.stock_cali = (p.stock_cali || 0) + i.cantidad;
+      else p.stock += i.cantidad;
+      DB.movimientos.push({id:uid('MOV'),fecha:today(),id_producto:p.id,tipo:'ajuste',cantidad:i.cantidad,costo_unitario:p.costo,referencia:ventaId,nota:'Devolución venta '+ventaId+(devCali?' (📍 Stock Cali)':'')});
+      syncProductoToFirestore(p).catch(()=>{});
+    }
   });
 
   // Financial effect
@@ -6339,6 +6579,163 @@ function saveAjuste(){
   if(!pid||qty<=0){alert('Selecciona producto y cantidad');return;}
   const p=getProducto(pid);
   if(p){p.stock=Math.max(0,p.stock-qty);DB.movimientos.push({id:uid('MOV'),fecha:today(),id_producto:pid,tipo,cantidad:-qty,nota:document.getElementById('aj-nota').value});saveDB();closeModal('modal-ajuste');renderInventario();}
+}
+
+// ── Gestión de Stock Satélite en Cali ──────────────────────
+function openModalStockCali(defaultTipo = 'enviar') {
+  document.getElementById('sc-tipo').value = defaultTipo;
+  document.getElementById('sc-fecha').value = today();
+  document.getElementById('sc-costo-envio').value = 0;
+  document.getElementById('sc-nota').value = '';
+  document.getElementById('sc-registrar-gasto').checked = true;
+  onCambioTipoStockCali();
+  renderStockCaliModalTable();
+  openModal('modal-stock-cali');
+}
+
+function onCambioTipoStockCali() {
+  const tipo = document.getElementById('sc-tipo').value;
+  const esEnviar = tipo === 'enviar';
+  const lbl = document.getElementById('sc-items-label');
+  if (lbl) lbl.textContent = esEnviar ? 'Productos a enviar de Bodega Principal → Cali' : 'Productos a devolver de Cali → Bodega Principal';
+  const fleteZone = document.getElementById('sc-flete-zone');
+  if (fleteZone) fleteZone.style.display = esEnviar ? 'block' : 'none';
+  const btnSave = document.getElementById('btn-save-stock-cali');
+  if (btnSave) btnSave.textContent = esEnviar ? '📤 Enviar a Stock Cali' : '📥 Reintegrar a Bodega Principal';
+
+  const list = document.getElementById('sc-items-list');
+  if (list) {
+    list.innerHTML = '';
+    addStockCaliItem();
+  }
+}
+
+function addStockCaliItem() {
+  const tipo = document.getElementById('sc-tipo').value;
+  const esEnviar = tipo === 'enviar';
+  const prods = DB.productos.filter(p => p.activo && (esEnviar ? p.stock > 0 : (p.stock_cali || 0) > 0));
+  const list = document.getElementById('sc-items-list');
+  if (!list) return;
+  if (!prods.length) {
+    list.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:var(--ink3);background:var(--bg2);border-radius:var(--r)">${esEnviar ? 'No hay productos con stock disponible en Bodega Principal.' : 'Actualmente no hay unidades en Stock Cali para devolver.'}</div>`;
+    return;
+  }
+  const opts = prods.map(p => {
+    const disp = esEnviar ? `${p.stock} en bodega` : `📍 ${p.stock_cali} en Cali`;
+    return `<option value="${p.id}">${p.nombre} (${disp})</option>`;
+  }).join('');
+  const row = document.createElement('div');
+  row.className = 'form-row sc-item-row';
+  row.style.marginBottom = '8px';
+  row.innerHTML = `
+    <div style="flex:1">
+      <select class="sc-prod" style="width:100%">${opts}</select>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="number" class="sc-qty" value="1" min="1" style="width:85px">
+      <button type="button" onclick="this.closest('.sc-item-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px" title="Quitar fila">✕</button>
+    </div>`;
+  list.appendChild(row);
+}
+
+function renderStockCaliModalTable() {
+  const prodsCali = DB.productos.filter(p => (p.stock_cali || 0) > 0);
+  const totalUds = prodsCali.reduce((a, p) => a + (p.stock_cali || 0), 0);
+  const totalPvp = prodsCali.reduce((a, p) => a + (p.precio || 0) * (p.stock_cali || 0), 0);
+  const totEl = document.getElementById('sc-resumen-modal-totales');
+  if (totEl) {
+    totEl.innerHTML = totalUds > 0 ? `<b>${totalUds} uds</b> · Valor venta: <b style="color:var(--sage)">${fmt(totalPvp)}</b>` : '0 unidades en Cali';
+  }
+  const tbl = document.getElementById('sc-actual-table');
+  if (!tbl) return;
+  if (!prodsCali.length) {
+    tbl.innerHTML = '<div style="padding:14px;text-align:center;font-size:12px;color:var(--ink3);font-style:italic">Aún no hay productos enviados a Stock Cali.</div>';
+    return;
+  }
+  tbl.innerHTML = `<table style="font-size:12px"><thead><tr><th style="padding:6px 10px">Producto</th><th style="padding:6px 10px">En Cali</th><th style="padding:6px 10px">PVP Unit.</th><th style="padding:6px 10px">Total PVP</th></tr></thead><tbody>
+    ${prodsCali.map(p => `<tr><td style="padding:6px 10px;font-weight:500">${p.nombre}</td><td style="padding:6px 10px"><span class="badge badge-blue">📍 ${p.stock_cali}</span></td><td style="padding:6px 10px">${fmt(p.precio)}</td><td style="padding:6px 10px;font-weight:600">${fmt((p.precio||0)*(p.stock_cali||0))}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+function saveStockCali() {
+  const tipo = document.getElementById('sc-tipo').value;
+  const esEnviar = tipo === 'enviar';
+  const fecha = document.getElementById('sc-fecha').value || today();
+  const notaUser = (document.getElementById('sc-nota').value || '').trim();
+  const costoEnvio = parseFloat(document.getElementById('sc-costo-envio').value) || 0;
+  const regGasto = document.getElementById('sc-registrar-gasto')?.checked;
+
+  const rows = document.querySelectorAll('#sc-items-list .sc-item-row');
+  if (!rows.length) { alert('Agrega al menos un producto'); return; }
+
+  // Agrupar cantidades por producto por si seleccionó el mismo producto dos veces
+  const agrupado = {};
+  for (const r of rows) {
+    const pid = r.querySelector('.sc-prod')?.value;
+    const qty = parseInt(r.querySelector('.sc-qty')?.value) || 0;
+    if (!pid || qty <= 0) { alert('Verifica que todos los productos tengan una cantidad mayor a 0'); return; }
+    agrupado[pid] = (agrupado[pid] || 0) + qty;
+  }
+
+  // Validar disponibilidad antes de aplicar
+  for (const [pid, qty] of Object.entries(agrupado)) {
+    const p = getProducto(pid);
+    if (!p) continue;
+    const disp = esEnviar ? p.stock : (p.stock_cali || 0);
+    if (disp < qty) {
+      alert(`Stock insuficiente para "${p.nombre}": tienes ${disp} disponibles en ${esEnviar ? 'Bodega Principal' : 'Stock Cali'} y solicitaste mover ${qty}.`);
+      return;
+    }
+  }
+
+  // Aplicar traslado
+  const ref = uid('CALI');
+  const resumenNombres = [];
+  for (const [pid, qty] of Object.entries(agrupado)) {
+    const p = getProducto(pid);
+    if (!p) continue;
+    if (esEnviar) {
+      p.stock -= qty;
+      p.stock_cali = (p.stock_cali || 0) + qty;
+      DB.movimientos.push({
+        id: uid('MOV'), fecha, id_producto: p.id,
+        tipo: 'traslado_cali', cantidad: -qty,
+        costo_unitario: p.costo || 0, referencia: ref,
+        nota: `📍 Envío a Stock Cali${notaUser ? ' · ' + notaUser : ''}`
+      });
+    } else {
+      p.stock_cali = Math.max(0, (p.stock_cali || 0) - qty);
+      p.stock += qty;
+      DB.movimientos.push({
+        id: uid('MOV'), fecha, id_producto: p.id,
+        tipo: 'retorno_cali', cantidad: qty,
+        costo_unitario: p.costo || 0, referencia: ref,
+        nota: `↩️ Retorno desde Cali a Bodega Principal${notaUser ? ' · ' + notaUser : ''}`
+      });
+    }
+    resumenNombres.push(`${p.nombre} x${qty}`);
+    syncProductoToFirestore(p).catch(()=>{});
+  }
+
+  // Registrar gasto de envío si aplica
+  if (esEnviar && costoEnvio > 0 && regGasto) {
+    DB.gastos.push({
+      id: uid('G'),
+      fecha,
+      categoria: 'Transporte / Envíos',
+      descripcion: `Envío caja Stock Cali (${resumenNombres.join(', ')})${notaUser ? ' · ' + notaUser : ''}`,
+      monto: costoEnvio,
+      tipo: 'variable',
+      proveedor: 'Transportadora'
+    });
+  }
+
+  saveDB();
+  closeModal('modal-stock-cali');
+  renderInventario();
+  if (typeof showAdminToast === 'function') {
+    showAdminToast(esEnviar ? '📍 Stock enviado a Cali correctamente' : '↩️ Stock reintegrado a Bodega Principal');
+  }
 }
 
 function openModalMuestra(){
