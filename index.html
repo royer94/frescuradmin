@@ -972,7 +972,7 @@ html, body {
     <!-- PRODUCTOS -->
     <div class="page" id="page-productos">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px;flex-wrap:wrap">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;flex:1">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;flex:1;align-items:center">
           <input type="text" id="search-prod" placeholder="Buscar producto..." style="max-width:220px" oninput="renderProductos()">
           <select id="filter-prod-cat" onchange="renderProductos()" style="max-width:180px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--ink);font-size:13px">
             <option value="">Todas las categorías</option>
@@ -983,6 +983,10 @@ html, body {
             <option value="medio">Margen medio (35–50%)</option>
             <option value="bajo">Margen bajo (&lt;35%)</option>
           </select>
+          <label style="display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--ink);font-size:12px;cursor:pointer;margin:0;user-select:none" title="Descuenta 3,8681% sobre el PVP (Tarifa Wompi 1,99% + IVA 19% [0,3781%] + ReteFuente 1,50%)">
+            <input type="checkbox" id="filter-prod-tarjeta" style="width:auto;margin:0" onchange="renderProductos()">
+            <span>💳 Ver margen con tarjeta (3,87%)</span>
+          </label>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary" onclick="sincronizarStockConWeb(false)" title="Enviar niveles de stock y precios actuales a la tienda web">🔄 Sincronizar Stock con Web</button>
@@ -1320,7 +1324,7 @@ html, body {
       <div class="form-row">
         <div class="form-group">
           <label>Método(s) de Pago <span style="font-weight:400;color:var(--ink3)">(selecciona uno o más)</span></label>
-          <div id="v-pago-checks" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+          <div id="v-pago-checks" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" onchange="calcTotalVenta()">
             <label style="display:flex;align-items:center;gap:5px;font-weight:400;cursor:pointer;background:var(--bg2);padding:6px 10px;border-radius:var(--r);border:1px solid var(--border);font-size:12px;margin:0"><input type="checkbox" value="Nequi" style="width:auto;margin:0"> Nequi</label>
             <label style="display:flex;align-items:center;gap:5px;font-weight:400;cursor:pointer;background:var(--bg2);padding:6px 10px;border-radius:var(--r);border:1px solid var(--border);font-size:12px;margin:0"><input type="checkbox" value="Bre-B" style="width:auto;margin:0"> Bre-B</label>
             <label style="display:flex;align-items:center;gap:5px;font-weight:400;cursor:pointer;background:var(--bg2);padding:6px 10px;border-radius:var(--r);border:1px solid var(--border);font-size:12px;margin:0"><input type="checkbox" value="Daviplata" style="width:auto;margin:0"> Daviplata</label>
@@ -1358,6 +1362,7 @@ html, body {
         <div style="display:flex;justify-content:space-between"><span class="fw-600">Total:</span><span class="text-mono fw-600" id="v-total-display">$0</span></div>
         <div style="display:flex;justify-content:space-between;margin-top:4px"><span class="text-muted">Costo productos:</span><span class="text-mono" id="v-costo-display">$0</span></div>
         <div style="display:flex;justify-content:space-between"><span class="text-muted">Margen bruto:</span><span class="text-mono fw-600 color-sage" id="v-margen-display">0%</span></div>
+        <div id="v-pasarela-zone" style="display:none;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:6px"><span class="text-muted">Cashback Club Frescura (5%):</span><span id="v-cashback-display" style="font-size:12px;padding:3px 8px;border-radius:2px;background:var(--bg2);color:var(--ink3)">Selecciona cliente</span></div>
       </div>
     </div>
@@ -1390,18 +1395,62 @@ html, body {
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Costo de Producción (COP) *</label><input type="number" id="p-costo" oninput="calcMargenProd()"></div>
-        <div class="form-group"><label>Precio de Venta (COP) *</label><input type="number" id="p-precio" oninput="calcMargenProd()"></div>
+        <div class="form-group">
+          <label>Costo de Producción (COP) * <span style="font-weight:400;color:var(--ink3);font-size:10.5px">(Granel + Empaque puro)</span></label>
+          <input type="number" id="p-costo" oninput="calcMargenProd()">
+        </div>
+        <div class="form-group">
+          <label>Precio de Venta / PVP (COP) *</label>
+          <input type="number" id="p-precio" oninput="calcMargenProd()">
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Stock Actual</label><input type="number" id="p-stock"></div>
         <div class="form-group"><label>Stock Mínimo (alerta)</label><input type="number" id="p-stock-min"></div>
       </div>
-      <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
         <input type="checkbox" id="p-tiene-descuento" style="width:auto" onchange="calcMargenProd()">
         <label style="margin:0;cursor:pointer" for="p-tiene-descuento">Este producto tiene descuento preestablecido (excluir del cashback)</label>
       </div>
-      <div style="border-radius:var(--r);padding:12px;font-size:13px;margin-bottom:16px" id="prod-margen-preview"></div>
+
+      <!-- SIMULADOR DE PRECIOS, MÁRGENES Y COMISIÓN PASARELA (WOMPI / NEQUI NEGOCIOS) -->
+      <div style="border:1.5px solid #c8d6e5;background:linear-gradient(180deg, rgba(58,90,122,0.06) 0%, rgba(58,90,122,0.02) 100%);border-radius:var(--r);padding:13px 14px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <label for="p-incluir-comision-tarjeta" style="display:flex;align-items:center;gap:9px;margin:0;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink)" title="Desglose exacto sobre PVP: Tarifa Wompi 1,99% + IVA 19% s/ comisión (0,3781%) + ReteFuente 1,50% = 3,8681% (~3,87%)">
+            <input type="checkbox" id="p-incluir-comision-tarjeta" checked style="width:16px;height:16px;margin:0;accent-color:#3a5a7a;cursor:pointer" onchange="calcMargenProd()">
+            <span>💳 Incluir comisión por pago con tarjeta (3,87% sobre PVP)</span>
+          </label>
+          <span style="font-size:10.5px;padding:3px 8px;border-radius:12px;background:#e8eff5;color:#2b4c6f;font-weight:600;font-family:'JetBrains Mono',monospace" title="1,99% Tarifa Wompi + 0,3781% IVA (19% de 1,99%) + 1,50% ReteFuente = 3,8681%">Wompi / Nequi Negocios · 3,8681%</span>
+        </div>
+
+        <!-- Simulador de PVP Sugerido a partir de Margen Deseado M -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:600;color:var(--ink2)">🎯 Simular PVP por margen deseado:</span>
+              <div style="display:inline-flex;align-items:center;gap:4px">
+                <input type="number" id="p-sim-margen" min="1" max="92" step="0.5" placeholder="Ej: 65" oninput="calcMargenProd()" style="width:76px;padding:5px 8px;font-size:12.5px;font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right">
+                <span style="font-size:12px;font-weight:600;color:var(--ink2)">%</span>
+              </div>
+              <div style="display:inline-flex;gap:4px;flex-wrap:wrap">
+                <button type="button" class="btn btn-xs btn-secondary" style="padding:2px 6px;font-size:10.5px" onclick="setSimMargenPreset(55)">55%</button>
+                <button type="button" class="btn btn-xs btn-secondary" style="padding:2px 6px;font-size:10.5px" onclick="setSimMargenPreset(60)">60%</button>
+                <button type="button" class="btn btn-xs btn-secondary" style="padding:2px 6px;font-size:10.5px" onclick="setSimMargenPreset(65)">65%</button>
+                <button type="button" class="btn btn-xs btn-secondary" style="padding:2px 6px;font-size:10.5px" onclick="setSimMargenPreset(70)">70%</button>
+                <button type="button" class="btn btn-xs btn-secondary" style="padding:2px 6px;font-size:10.5px" onclick="setSimMargenPreset(75)">75%</button>
+              </div>
+            </div>
+            <div id="p-sim-pvp-output" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--ink3)">
+              <span>Ingresa un margen deseado para proteger tu utilidad</span>
+            </div>
+          </div>
+          <div id="p-sim-formula-hint" style="font-size:10.5px;color:var(--ink3);margin-top:6px;font-family:'JetBrains Mono',monospace">
+            Fórmula protegida: PVP Sugerido = Costo Unitario / (1 − Margen − 0,038681)
+          </div>
+        </div>
+
+        <div style="border-radius:var(--r);padding:12px;font-size:13px" id="prod-margen-preview"></div>
+      </div>
 
       <!-- SECCIÓN IA + PUBLICACIÓN EN TIENDA WEB -->
       <div style="border:1.5px solid var(--sage);background:rgba(74,107,82,0.04);border-radius:var(--r);padding:16px;margin-bottom:16px">
@@ -2783,7 +2832,50 @@ function importData() {
 // HELPERS
 // ══════════════════════════════════════════════════════════
 const COLORS = ['#5a7a5c','#9b5a3a','#3a5a7a','#8a6c3a','#7a3a7a','#3a7a7a','#7a6a3a','#5a3a7a'];
-const fmt = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:0}).format(n||0);
+const fmt = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:0,maximumFractionDigits:0}).format(Math.round(n||0));
+const fmtDec = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
+
+// Regla Matemática Exacta: Comisión por pago con tarjeta (Pasarela Wompi / Nequi Negocios) sobre PVP
+const PASARELA_TARIFA_PCT = 0.0199;      // 1,99% Tarifa pasarela Wompi
+const PASARELA_IVA_PCT    = 0.003781;    // 0,3781% IVA sobre la comisión (19% de 1,99%)
+const PASARELA_RETE_PCT   = 0.0150;      // 1,50% Retención en la fuente (ReteFuente)
+const PASARELA_TOTAL_PCT  = 0.038681;    // 3,8681% (~3,87%) Tasa total combinada sobre el Precio de Venta
+
+function calcDesglosePasarela(pvp, costo = 0) {
+  const p = Number(pvp) || 0;
+  const c = Number(costo) || 0;
+  const tarifa = p * PASARELA_TARIFA_PCT;
+  const iva = p * PASARELA_IVA_PCT;
+  const rete = p * PASARELA_RETE_PCT;
+  const comision = p * PASARELA_TOTAL_PCT;
+  const ingresoNeto = p - comision;
+  const utilidadBruta = p - c;
+  const margenBruto = p > 0 ? (utilidadBruta / p) * 100 : 0;
+  const utilidadNeta = ingresoNeto - c;
+  const margenNeto = p > 0 ? (utilidadNeta / p) * 100 : 0;
+  return {
+    pvp: p,
+    costo: c,
+    tarifa,
+    iva,
+    rete,
+    comision,
+    ingresoNeto,
+    utilidadBruta,
+    margenBruto,
+    utilidadNeta,
+    margenNeto
+  };
+}
+
+function calcPvpSugerido(costo, margenDeseadoPct, incluirTarjeta = true) {
+  const c = Number(costo) || 0;
+  const m = (Number(margenDeseadoPct) || 0) / 100;
+  const tasa = incluirTarjeta ? PASARELA_TOTAL_PCT : 0;
+  const denom = 1 - m - tasa;
+  if (c <= 0 || m <= 0 || denom <= 0.005) return 0;
+  return c / denom;
+}
 const today = () => { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const uid = p => `${p}-${Date.now().toString(36).toUpperCase()}`;
 const getProducto = id => DB.productos.find(p=>p.id===id);
@@ -4490,9 +4582,11 @@ function renderProductos() {
     if (cv) prods = prods.filter(p => p.categoria === cv);
   }
   const margenFiltro = document.getElementById('filter-prod-margen')?.value || '';
+  const verConTarjeta = document.getElementById('filter-prod-tarjeta')?.checked || false;
   if (margenFiltro) {
     prods = prods.filter(p => {
-      const m = p.precio>0 ? (p.precio-p.costo)/p.precio*100 : 0;
+      const d = calcDesglosePasarela(p.precio, p.costo);
+      const m = verConTarjeta ? d.margenNeto : d.margenBruto;
       if (margenFiltro==='alto') return m>=50;
       if (margenFiltro==='medio') return m>=35 && m<50;
       if (margenFiltro==='bajo') return m<35;
@@ -4505,8 +4599,16 @@ function renderProductos() {
   if (_productosPage < 1) _productosPage = 1;
   const prodsPage = prods.slice((_productosPage-1)*PRODUCTOS_PAGE_SIZE, _productosPage*PRODUCTOS_PAGE_SIZE);
   document.getElementById('productos-table').innerHTML=prods.length===0?'<div class="empty"><div class="empty-icon">🧴</div><h3>Sin productos</h3></div>':`
-    <table><thead><tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Costo</th><th>Precio</th><th>Margen</th><th>Stock</th><th>Tienda Web</th><th>Promo</th><th></th></tr></thead><tbody>
-    ${prodsPage.map(p=>{const m=p.precio>0?(p.precio-p.costo)/p.precio*100:0;
+    <table><thead><tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Costo Puro</th><th>Precio (PVP)</th><th>${verConTarjeta ? 'Margen Neto 💳' : 'Margen'}</th><th>Stock</th><th>Tienda Web</th><th>Promo</th><th></th></tr></thead><tbody>
+    ${prodsPage.map(p=>{
+    const desg = calcDesglosePasarela(p.precio, p.costo);
+    const m = verConTarjeta ? desg.margenNeto : desg.margenBruto;
+    const margenCellHtml = verConTarjeta
+      ? `<div title="PVP: ${fmt(p.precio)} | Comisión tarjeta (3,8681%): -${fmtDec(desg.comision)} (Tarifa 1,99%: ${fmtDec(desg.tarifa)} + IVA 19%: ${fmtDec(desg.iva)} + ReteFuente 1,50%: ${fmtDec(desg.rete)}) | Ingreso Neto: ${fmtDec(desg.ingresoNeto)} | Utilidad Neta: ${fmtDec(desg.utilidadNeta)}">
+           <strong>${m.toFixed(1)}%</strong> <span style="font-size:10px;color:var(--ink3)">(Bruto ${desg.margenBruto.toFixed(0)}%)</span>
+           <div style="font-size:10.5px;color:var(--ink3);font-weight:400">Neto: ${fmt(desg.utilidadNeta)} · <span style="color:#9b3a3a">-${fmt(desg.comision)} 💳</span></div>
+         </div>`
+      : `${m.toFixed(0)}%`;
     const webBadge = p.web_publicado && p.web_slug
       ? `<a href="https://www.frescuranaturalcosmeticos.com/${p.web_slug}/" target="_blank" rel="noopener" class="badge" style="font-size:10px;background:var(--sage-light);color:var(--sage);text-decoration:none" title="Ver página del producto en la web">🌐 Publicado ↗</a>`
       : `<button class="btn btn-xs btn-secondary" style="font-size:10px;padding:2px 7px" onclick="editProducto('${p.id}')" title="Configurar y publicar en tienda web">🌐 Publicar</button>`;
@@ -4518,7 +4620,7 @@ function renderProductos() {
     const promoCell = enPromo
       ? `<span class="badge" style="font-size:9.5px;background:var(--gold-light);color:var(--gold);line-height:1.3;display:inline-block">🏷️ Ahora ${fmt(pOferta)}<br><span style="font-size:8.5px">hasta ${p.promo_hasta}</span></span>`
       : (pOferta > 0 && p.promo_desde ? `<span class="badge badge-gray" style="font-size:9px" title="Oferta ${fmt(pOferta)} del ${p.promo_desde} al ${p.promo_hasta}">⏳ ${p.promo_desde}</span>` : '');
-    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td>${fmt(p.costo)}</td><td class="fw-600">${precioCell}</td><td class="${m>=50?'color-sage':m>=35?'color-gold':'color-red'}">${m.toFixed(0)}%</td><td class="${p.stock<=p.stock_min?'color-red':'color-sage'} fw-600">${p.stock}</td><td>${webBadge}</td><td>${promoCell}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editProducto('${p.id}')" title="Editar y gestionar publicación web">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteProducto('${p.id}')">🗑</button></div></td></tr>`;}).join('')}
+    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td>${fmt(p.costo)}</td><td class="fw-600">${precioCell}</td><td class="${m>=50?'color-sage':m>=35?'color-gold':'color-red'}">${margenCellHtml}</td><td class="${p.stock<=p.stock_min?'color-red':'color-sage'} fw-600">${p.stock}</td><td>${webBadge}</td><td>${promoCell}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editProducto('${p.id}')" title="Editar y gestionar publicación web">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteProducto('${p.id}')">🗑</button></div></td></tr>`;}).join('')}
     </tbody></table>
     ${paginationControlsHTML(_productosPage, totalPagesP, 'goToProductosPage')}`;
 }
@@ -4535,6 +4637,20 @@ function editProducto(id){
   document.getElementById('p-stock-min').value=p.stock_min;
   document.getElementById('p-desc').value=p.desc||'';
   document.getElementById('p-tiene-descuento').checked=p.tiene_descuento||false;
+  const chkTarjeta = document.getElementById('p-incluir-comision-tarjeta');
+  if (chkTarjeta) chkTarjeta.checked = p.incluir_comision_tarjeta !== undefined ? Boolean(p.incluir_comision_tarjeta) : true;
+  const simMargenEl = document.getElementById('p-sim-margen');
+  if (simMargenEl) {
+    if (p.margen_deseado_sim) {
+      simMargenEl.value = p.margen_deseado_sim;
+    } else if (p.precio > 0 && p.costo > 0) {
+      const desg = calcDesglosePasarela(p.precio, p.costo);
+      const mBase = (chkTarjeta && chkTarjeta.checked) ? desg.margenNeto : desg.margenBruto;
+      simMargenEl.value = Math.max(5, Math.min(90, Math.round(mBase * 10) / 10));
+    } else {
+      simMargenEl.value = '';
+    }
+  }
   const pOferta = precioOfertaConfigurado(p);
   document.getElementById('p-promo-precio').value=pOferta>0?pOferta:'';
   document.getElementById('p-promo-pct').value=p.descuento_pct||(pOferta>0&&p.precio>0?Math.round((1-pOferta/p.precio)*1000)/10:'');
@@ -5594,6 +5710,34 @@ function calcTotalVenta(){
   document.getElementById('v-total-display').textContent=fmt(total);
   document.getElementById('v-costo-display').textContent=fmt(costoTotal);
   document.getElementById('v-margen-display').textContent=margen.toFixed(1)+'%';
+  const metodosSel = Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value);
+  const usaPasarela = metodosSel.some(m => m === 'Wompi' || m === 'Tarjeta');
+  const pasZone = document.getElementById('v-pasarela-zone');
+  if (pasZone) {
+    if (usaPasarela && total > 0) {
+      const desgV = calcDesglosePasarela(total, costoTotal);
+      pasZone.style.display = 'block';
+      pasZone.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;color:#9b3a3a;font-size:12px" title="Tarifa Wompi 1,99%: ${fmtDec(desgV.tarifa)} + IVA 19% (0,3781%): ${fmtDec(desgV.iva)} + ReteFuente 1,50%: ${fmtDec(desgV.rete)}">
+          <span>💳 Comisión pasarela (3,8681% s/ total):</span>
+          <span class="text-mono fw-600">-${fmtDec(desgV.comision)} (~${fmt(desgV.comision)})</span>
+        </div>
+        <div style="font-size:10.5px;color:var(--ink3);margin:2px 0 4px">
+          Tarifa 1,99%: ${fmtDec(desgV.tarifa)} · IVA 19%: ${fmtDec(desgV.iva)} · ReteFuente 1,50%: ${fmtDec(desgV.rete)}
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span class="text-muted">Ingreso neto recibido tras pasarela:</span>
+          <span class="text-mono fw-600">${fmtDec(desgV.ingresoNeto)} (~${fmt(desgV.ingresoNeto)})</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span class="text-muted">Utilidad neta real / Margen neto real:</span>
+          <span class="text-mono fw-600 ${desgV.margenNeto>=50?'color-sage':desgV.margenNeto>=35?'color-gold':'color-red'}">${fmt(desgV.utilidadNeta)} (${desgV.margenNeto.toFixed(1)}%)</span>
+        </div>`;
+    } else {
+      pasZone.style.display = 'none';
+      pasZone.innerHTML = '';
+    }
+  }
   // Cashback preview: recalculate inline from DOM (vid doesn't exist yet at preview stage)
   const selCid = document.getElementById('v-cliente')?.value;
   const selC = selCid ? DB.clientes?.find(x=>x.id===selCid) : null;
@@ -5820,12 +5964,31 @@ function poblarSelectCategoriaProducto(valorActual){
 function openModalProducto(){
   document.getElementById('modal-producto-title').textContent='Nuevo Producto';
   document.getElementById('p-id').value='';
-  ['p-nombre','p-costo','p-precio','p-stock','p-stock-min','p-desc','p-promo-precio','p-promo-pct','p-promo-desde','p-promo-hasta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['p-nombre','p-costo','p-precio','p-stock','p-stock-min','p-desc','p-promo-precio','p-promo-pct','p-promo-desde','p-promo-hasta','p-sim-margen'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('p-tiene-descuento').checked=false;
+  const chkTarjeta = document.getElementById('p-incluir-comision-tarjeta');
+  if (chkTarjeta) chkTarjeta.checked = true;
   document.getElementById('prod-margen-preview').innerHTML='';
   poblarSelectCategoriaProducto('');
   populateWebFieldsModal(null);
+  calcMargenProd();
   openModal('modal-producto');
+}
+
+function setSimMargenPreset(pct){
+  const el = document.getElementById('p-sim-margen');
+  if (el) {
+    el.value = pct;
+    calcMargenProd();
+  }
+}
+
+function aplicarPvpSugerido(valorPvp){
+  const precioEl = document.getElementById('p-precio');
+  if (precioEl && valorPvp > 0) {
+    precioEl.value = Math.round(valorPvp);
+    calcMargenProd();
+  }
 }
 
 function onPromoPrecioInput(){
@@ -5876,23 +6039,132 @@ function calcMargenProd(){
   const costo=parseFloat(document.getElementById('p-costo')?.value)||0;
   const precio=parseFloat(document.getElementById('p-precio')?.value)||0;
   const hasDesc=document.getElementById('p-tiene-descuento')?.checked;
+  const incTarjeta=document.getElementById('p-incluir-comision-tarjeta')?.checked ?? true;
+  const simMargen=parseFloat(document.getElementById('p-sim-margen')?.value)||0;
   let promoPrecio=parseFloat(document.getElementById('p-promo-precio')?.value)||0;
   let promoPct=parseFloat(document.getElementById('p-promo-pct')?.value)||0;
   if(!promoPrecio && promoPct>0 && precio>0) promoPrecio = Math.round(precio*(1-promoPct/100));
   if(promoPrecio>0 && precio>0) promoPct = Math.round((1-promoPrecio/precio)*1000)/10;
   const hasta=document.getElementById('p-promo-hasta')?.value||'';
+
+  // Actualizar simulador de PVP Sugerido
+  const simOut = document.getElementById('p-sim-pvp-output');
+  const simFormula = document.getElementById('p-sim-formula-hint');
+  if (simFormula) {
+    simFormula.textContent = incTarjeta
+      ? 'Fórmula protegida con tarjeta: PVP Sugerido = Costo Unitario / (1 − Margen − 0,038681)'
+      : 'Fórmula sin pasarela: PVP Sugerido = Costo Unitario / (1 − Margen)';
+  }
+  if (simOut) {
+    if (costo > 0 && simMargen > 0) {
+      const tasa = incTarjeta ? PASARELA_TOTAL_PCT : 0;
+      const denom = 1 - (simMargen / 100) - tasa;
+      if (denom <= 0.01) {
+        simOut.innerHTML = `<span style="color:#9b3a3a;font-weight:600">⚠️ El margen (${simMargen}%) + comisión (${(tasa*100).toFixed(2)}%) supera el 100% del PVP</span>`;
+      } else {
+        const pvpExacto = calcPvpSugerido(costo, simMargen, incTarjeta);
+        const pvpRedondeado100 = Math.ceil(pvpExacto / 100) * 100;
+        simOut.innerHTML = `
+          <span style="color:var(--ink2)">PVP Sugerido: <strong class="text-mono" style="color:#2b4c6f;font-size:13px">${fmt(pvpExacto)}</strong> <span style="font-size:11px;color:var(--ink3)">(${fmtDec(pvpExacto)})</span></span>
+          <button type="button" class="btn btn-xs btn-primary" style="padding:3px 8px;font-size:11px;background:#3a5a7a;border-color:#3a5a7a" onclick="aplicarPvpSugerido(${Math.round(pvpExacto)})" title="Aplicar ${fmt(pvpExacto)} al Precio de Venta">Aplicar ${fmt(pvpExacto)}</button>
+          ${pvpRedondeado100 !== Math.round(pvpExacto) ? `<button type="button" class="btn btn-xs btn-secondary" style="padding:3px 8px;font-size:11px" onclick="aplicarPvpSugerido(${pvpRedondeado100})" title="Aplicar precio comercial redondeado a centena (${fmt(pvpRedondeado100)})">Redondear ${fmt(pvpRedondeado100)}</button>` : ''}
+        `;
+      }
+    } else if (costo <= 0 && simMargen > 0) {
+      simOut.innerHTML = `<span style="color:var(--gold)">Ingresa primero el Costo de Producción para calcular el PVP sugerido</span>`;
+    } else {
+      simOut.innerHTML = `<span>Ingresa un margen deseado (ej. 65%) para calcular el PVP sugerido</span>`;
+    }
+  }
+
   const prev=document.getElementById('prod-margen-preview');
-  if(costo&&precio){
-    const m=(precio-costo)/precio*100;
-    prev.style.background=m>=50?'var(--sage-light)':m>=35?'var(--gold-light)':'var(--red-light)';
-    let html=`<strong>Margen regular: ${m.toFixed(1)}%</strong> · Ganancia: ${fmt(precio-costo)} · ${m>=50?'✓ Saludable':m>=35?'⚠ Aceptable':'🚨 Bajo'} · Cashback: ${(hasDesc||promoPrecio>0)?'<span style="color:var(--ink3)">Excluido en promo</span>':'<span class="cashback-pill">5% → '+fmt((precio-costo)*0.05)+' aprox.</span>'}`;
+  if(!prev) return;
+  if(costo>0 && precio>0){
+    const desg = calcDesglosePasarela(precio, costo);
+    const mRef = incTarjeta ? desg.margenNeto : desg.margenBruto;
+    prev.style.background = mRef>=50 ? 'var(--sage-light)' : mRef>=35 ? 'var(--gold-light)' : 'var(--red-light)';
+    prev.style.border = '1px solid ' + (mRef>=50 ? 'rgba(74,107,82,0.28)' : mRef>=35 ? 'rgba(180,130,50,0.3)' : 'rgba(155,58,58,0.3)');
+
+    const tooltipDesglose = `Desglose pasarela sobre PVP (${fmt(precio)}):&#10;• Tarifa Wompi (1,99%): ${fmtDec(desg.tarifa)} (~${fmt(desg.tarifa)})&#10;• IVA comisión 19% (0,3781%): ${fmtDec(desg.iva)} (~${fmt(desg.iva)})&#10;• ReteFuente (1,50%): ${fmtDec(desg.rete)} (~${fmt(desg.rete)})&#10;• Total descontado (3,8681%): ${fmtDec(desg.comision)} (~${fmt(desg.comision)})&#10;• Ingreso Neto: ${fmtDec(desg.ingresoNeto)} (~${fmt(desg.ingresoNeto)})`;
+
+    let html = `
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div>
+          <strong>Margen Bruto (sin pasarela): ${desg.margenBruto.toFixed(1)}%</strong>
+          · Utilidad bruta: <strong>${fmt(desg.utilidadBruta)}</strong>
+          · Costo puro: <span class="text-mono">${fmt(costo)}</span>
+        </div>
+        <div>
+          Cashback: ${(hasDesc||promoPrecio>0)?'<span style="color:var(--ink3)">Excluido en promo</span>':'<span class="cashback-pill">5% → '+fmt((precio-costo)*0.05)+' aprox.</span>'}
+        </div>
+      </div>`;
+
+    if (incTarjeta) {
+      html += `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(0,0,0,0.14)">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          <span style="font-weight:700;color:#1e3a5f;font-size:12.5px" title="${tooltipDesglose}">
+            💳 Descuento Pasarela Wompi / Nequi Negocios (3,8681% s/ PVP) <span style="cursor:help;text-decoration:underline dotted;font-weight:500;font-size:11px">(ver tooltip)</span>:
+          </span>
+          <span class="text-mono" style="font-weight:700;color:#9b3a3a;font-size:13px" title="${tooltipDesglose}">
+            −${fmtDec(desg.comision)} <span style="font-size:11px;font-weight:500;color:var(--ink2)">(~${fmt(desg.comision)})</span>
+          </span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;font-size:11.5px" title="${tooltipDesglose}">
+          <div style="background:rgba(255,255,255,0.72);padding:6px 8px;border-radius:4px;border:1px solid rgba(0,0,0,0.07)">
+            <div style="color:var(--ink3);font-size:10.5px">Tarifa Wompi (1,99%)</div>
+            <div class="text-mono fw-600" style="color:#9b3a3a">−${fmtDec(desg.tarifa)} <span style="font-weight:400;color:var(--ink3)">(${fmt(desg.tarifa)})</span></div>
+          </div>
+          <div style="background:rgba(255,255,255,0.72);padding:6px 8px;border-radius:4px;border:1px solid rgba(0,0,0,0.07)">
+            <div style="color:var(--ink3);font-size:10.5px">IVA 19% s/ tarifa (0,3781%)</div>
+            <div class="text-mono fw-600" style="color:#9b3a3a">−${fmtDec(desg.iva)} <span style="font-weight:400;color:var(--ink3)">(~${fmt(desg.iva)})</span></div>
+          </div>
+          <div style="background:rgba(255,255,255,0.72);padding:6px 8px;border-radius:4px;border:1px solid rgba(0,0,0,0.07)">
+            <div style="color:var(--ink3);font-size:10.5px">ReteFuente (1,50%)</div>
+            <div class="text-mono fw-600" style="color:#9b3a3a">−${fmtDec(desg.rete)} <span style="font-weight:400;color:var(--ink3)">(${fmt(desg.rete)})</span></div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:rgba(255,255,255,0.88);padding:9px 10px;border-radius:6px;border:1px solid rgba(58,90,122,0.22)">
+          <div>
+            <div style="font-size:10.5px;color:var(--ink3);font-weight:500">Ingreso Neto tras pasarela</div>
+            <div class="text-mono fw-600" style="font-size:13.5px;color:var(--ink)">${fmtDec(desg.ingresoNeto)}</div>
+            <div style="font-size:10.5px;color:var(--ink3)">~${fmt(desg.ingresoNeto)} (PVP − Comisión)</div>
+          </div>
+          <div>
+            <div style="font-size:10.5px;color:var(--ink3);font-weight:500">Utilidad Neta Real</div>
+            <div class="text-mono fw-600" style="font-size:13.5px;color:${desg.utilidadNeta>=0?'var(--sage)':'#9b3a3a'}">${fmtDec(desg.utilidadNeta)}</div>
+            <div style="font-size:10.5px;color:var(--ink3)">~${fmt(desg.utilidadNeta)} (Ingreso Neto − Costo)</div>
+          </div>
+          <div>
+            <div style="font-size:10.5px;color:var(--ink3);font-weight:500">Margen Neto Real (%)</div>
+            <div class="text-mono fw-600" style="font-size:14px;color:${desg.margenNeto>=50?'var(--sage)':desg.margenNeto>=35?'var(--gold)':'#9b3a3a'}">
+              ${desg.margenNeto.toFixed(2)}% <span style="font-size:11px;font-weight:500">${desg.margenNeto>=50?'✓ Saludable':desg.margenNeto>=35?'⚠ Aceptable':'🚨 Bajo'}</span>
+            </div>
+            <div style="font-size:10.5px;color:var(--ink3)">Impacto pasarela: −3,87 pts</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
     if(promoPrecio>0 && promoPrecio<precio){
-      const mPromo=(promoPrecio-costo)/promoPrecio*100;
+      const desgPromo = calcDesglosePasarela(promoPrecio, costo);
       const ahorro=precio-promoPrecio;
-      html+=`<br><span style="color:var(--gold);font-weight:600">🏷️ Oferta Antes ${fmt(precio)} → Ahora ${fmt(promoPrecio)} (-${promoPct}% · Ahorro ${fmt(ahorro)}) · Margen en oferta: ${mPromo.toFixed(1)}%${hasta?' · Hasta '+hasta:''}${mPromo<0?' 🚨 Vendes por debajo del costo':''}</span>`;
+      html+=`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,0.12);color:var(--gold);font-weight:600;font-size:12px">
+        🏷️ Oferta Antes ${fmt(precio)} → Ahora ${fmt(promoPrecio)} (-${promoPct}% · Ahorro ${fmt(ahorro)})
+        · Margen bruto oferta: ${desgPromo.margenBruto.toFixed(1)}%
+        ${incTarjeta ? ` · 💳 Com. oferta: -${fmtDec(desgPromo.comision)} · Ingreso neto: ${fmtDec(desgPromo.ingresoNeto)} · <strong>Margen Neto Oferta: ${desgPromo.margenNeto.toFixed(1)}%</strong> (${fmt(desgPromo.utilidadNeta)})` : ''}
+        ${hasta?' · Hasta '+hasta:''}
+        ${(incTarjeta ? desgPromo.utilidadNeta : desgPromo.utilidadBruta)<0?' 🚨 Vendes por debajo del costo':''}
+      </div>`;
     }
     prev.innerHTML=html;
-  } else { prev.innerHTML=''; }
+  } else {
+    prev.style.background = 'rgba(255,255,255,0.6)';
+    prev.style.border = '1px dashed var(--border)';
+    prev.innerHTML='<span style="color:var(--ink3);font-size:12px">Ingresa el Costo de Producción y el Precio de Venta (PVP) para ver el desglose de comisión por tarjeta, ingreso neto y margen real.</span>';
+  }
 }
 
 const FN_WEB_PUBLISH_URL = 'https://www.frescuranaturalcosmeticos.com/api/publicar_producto.php';
@@ -6135,7 +6407,13 @@ function populateWebFieldsModal(p){
     document.getElementById('p-web-variants').value = Array.isArray(p.web_variants) ? p.web_variants.join(', ') : (p.web_variants || '');
     const _mP = resolverVinculoWebProducto(p);
     const _sP = _mP ? WEB_CATALOG_SEED[_mP.web_id] : null;
-    const curVprices = (Array.isArray(p.web_vprices) && p.web_vprices.length) ? p.web_vprices : (_sP?.vprices || []);
+    let curVprices = (Array.isArray(p.web_vprices) && p.web_vprices.length) ? [...p.web_vprices] : [...(_sP?.vprices || [])];
+    if (_mP && _sP && Array.isArray(_sP.variants) && _mP.variant && Number(p.precio) > 0) {
+      const vIdx = _sP.variants.indexOf(_mP.variant);
+      if (vIdx >= 0) {
+        curVprices[vIdx] = Number(p.precio);
+      }
+    }
     document.getElementById('p-web-vprices').value = curVprices.length ? curVprices.join(', ') : '';
     document.getElementById('p-web-foto-existing').value = p.web_img || '';
 
@@ -6382,6 +6660,8 @@ async function saveProducto(publishToWeb = false){
     stock_min:parseInt(document.getElementById('p-stock-min').value)||5,
     desc:document.getElementById('p-desc').value.trim(),
     tiene_descuento:document.getElementById('p-tiene-descuento').checked,
+    incluir_comision_tarjeta:document.getElementById('p-incluir-comision-tarjeta')?.checked ?? true,
+    margen_deseado_sim:parseFloat(document.getElementById('p-sim-margen')?.value)||0,
     precio_promo:promoPrecio,descuento_pct:promoPct,promo_desde:promoDesde,promo_hasta:promoHasta,activo:true,
     web_ingredientes: document.getElementById('p-web-ingredientes')?.value.trim() || '',
     web_resumen: document.getElementById('p-web-resumen')?.value.trim() || '',
@@ -6438,6 +6718,9 @@ async function saveProducto(publishToWeb = false){
           });
           if (sibling && Number(sibling.precio) > 0) {
             return Number(sibling.precio);
+          }
+          if (Array.isArray(webVprices) && typeof webVprices[idx] === 'number' && webVprices[idx] > 0) {
+            return webVprices[idx];
           }
           if (Array.isArray(_seed.vprices) && typeof _seed.vprices[idx] === 'number' && _seed.vprices[idx] > 0) {
             return _seed.vprices[idx];
