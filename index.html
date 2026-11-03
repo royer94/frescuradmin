@@ -1885,6 +1885,7 @@ const FEED_PRECIOS = {
 function aplicarPreciosFeed(productos) {
   if (!productos) return;
   productos.forEach(p => {
+    if (p.precio_custom) return;
     if (FEED_PRECIOS[p.id]) {
       p.precio = FEED_PRECIOS[p.id];
     } else {
@@ -1964,8 +1965,9 @@ function resolverVinculoWebProducto(p) {
   // 6. Sérums (30 mL / 50 mL) — si no dice 50 mL en el nombre ni cuesta >= 44.000, es la presentación base de 30 mL
   if ((n.includes('serum') || n.includes('natural clear') || n.includes('hydra e') || n.includes('hydra-e') || n.includes('fuerza capilar') || n.includes('acne balance')) && !n.includes('pack') && !n.includes('combo') && !n.includes('jabon')) {
     let variant = '30 mL';
-    if ((n.includes('50') && n.includes('ml')) || Number(p.precio) >= 44000) variant = '50 mL';
-    else if (n.includes('30') && n.includes('ml')) variant = '30 mL';
+    if (n.includes('50') && (n.includes('ml') || n.includes('50ml'))) variant = '50 mL';
+    else if (n.includes('30') && (n.includes('ml') || n.includes('30ml'))) variant = '30 mL';
+    else if (Number(p.precio) >= 44000) variant = '50 mL';
 
     if (n.includes('clear') || n.includes('despigmentante')) return { web_id: 'SER-001', variant };
     if (n.includes('fuerza capilar') || n.includes('oleoso capilar') || n.includes('capilar')) return { web_id: 'SER-002', variant };
@@ -2151,6 +2153,7 @@ async function sincronizarStockConWeb(silent = true) {
         items: [],
         variants_stock: {},
         variants_promo: {},
+        variants_prices: {},
         promo: null
       };
     }
@@ -2169,6 +2172,8 @@ async function sincronizarStockConWeb(silent = true) {
     });
     if (match.variant) {
       grouped[wid].variants_stock[match.variant] = (grouped[wid].variants_stock[match.variant] || 0) + st;
+      if (!grouped[wid].variants_prices) grouped[wid].variants_prices = {};
+      grouped[wid].variants_prices[match.variant] = pr;
       if (hasPromoCfg) {
         grouped[wid].variants_promo[match.variant] = {
           regular_price: pr,
@@ -2239,6 +2244,12 @@ async function sincronizarStockConWeb(silent = true) {
     const isPromoActiveToday = Boolean(prm && prm.promo_desde <= hoyStr && hoyStr <= prm.promo_hasta);
     if (isPromoActiveToday) promosActivasCount++;
 
+    let vpricesArr = [];
+    const seedWid = WEB_CATALOG_SEED[wid];
+    if (seedWid && Array.isArray(seedWid.variants) && seedWid.variants.length > 0 && g.variants_prices) {
+      vpricesArr = seedWid.variants.map((v, i) => g.variants_prices[v] || (seedWid.vprices && seedWid.vprices[i]) || 0);
+    }
+
     stockMap[wid] = {
       stock: g.stock,
       stock_min: g.stock_min,
@@ -2253,7 +2264,9 @@ async function sincronizarStockConWeb(silent = true) {
       promo_active: isPromoActiveToday,
       slug: g.slug,
       variants_stock: g.variants_stock,
-      variants_promo: g.variants_promo
+      variants_promo: g.variants_promo,
+      variants_prices: g.variants_prices || {},
+      vprices: vpricesArr.length > 0 ? vpricesArr : (seedWid?.vprices || [])
     };
   });
 
@@ -6120,7 +6133,10 @@ function populateWebFieldsModal(p){
     document.getElementById('p-web-modo-uso').value = p.web_modo_uso || '';
     document.getElementById('p-web-vlabel').value = p.web_vlabel || '';
     document.getElementById('p-web-variants').value = Array.isArray(p.web_variants) ? p.web_variants.join(', ') : (p.web_variants || '');
-    document.getElementById('p-web-vprices').value = Array.isArray(p.web_vprices) ? p.web_vprices.join(', ') : (p.web_vprices || '');
+    const _mP = resolverVinculoWebProducto(p);
+    const _sP = _mP ? WEB_CATALOG_SEED[_mP.web_id] : null;
+    const curVprices = (Array.isArray(p.web_vprices) && p.web_vprices.length) ? p.web_vprices : (_sP?.vprices || []);
+    document.getElementById('p-web-vprices').value = curVprices.length ? curVprices.join(', ') : '';
     document.getElementById('p-web-foto-existing').value = p.web_img || '';
 
     const cats = Array.isArray(p.web_cats) && p.web_cats.length ? p.web_cats : ['Corporal'];
@@ -6361,6 +6377,7 @@ async function saveProducto(publishToWeb = false){
   const existingProd = existingId ? getProducto(existingId) : null;
   const data={
     nombre,categoria,costo,precio,
+    precio_custom: true,
     stock:parseInt(document.getElementById('p-stock').value)||0,
     stock_min:parseInt(document.getElementById('p-stock-min').value)||5,
     desc:document.getElementById('p-desc').value.trim(),
@@ -6404,6 +6421,69 @@ async function saveProducto(publishToWeb = false){
       const _wid = _matchWeb?.web_id || prodRef.web_id || prodRef.id;
       const _seed = WEB_CATALOG_SEED[_wid] || null;
       const _isMultiSkuFamily = Boolean(_seed && (_matchWeb?.variant || (_seed.variants && _seed.variants.length > 0)));
+
+      // Calcular precios y variantes dinámicamente según el precio actual guardado en el ERP
+      let _finalVprices = [];
+      let _finalPrice = prodRef.precio;
+
+      if (_isMultiSkuFamily && _seed && Array.isArray(_seed.variants) && _seed.variants.length > 0) {
+        _finalVprices = _seed.variants.map((vName, idx) => {
+          if (_matchWeb?.variant === vName) {
+            return Number(prodRef.precio) || 0;
+          }
+          const sibling = (DB.productos || []).find(p => {
+            if (!p || p.id === prodRef.id || p.activo === false) return false;
+            const m = resolverVinculoWebProducto(p);
+            return m && m.web_id === _wid && m.variant === vName;
+          });
+          if (sibling && Number(sibling.precio) > 0) {
+            return Number(sibling.precio);
+          }
+          if (Array.isArray(_seed.vprices) && typeof _seed.vprices[idx] === 'number' && _seed.vprices[idx] > 0) {
+            return _seed.vprices[idx];
+          }
+          return Number(prodRef.precio) || 0;
+        });
+
+        const hasDistinctPrices = _finalVprices.some((p, _, arr) => p !== arr[0]);
+        const hadSeedVprices = Boolean(_seed.vprices && _seed.vprices.length > 0);
+
+        if (hasDistinctPrices || hadSeedVprices) {
+          const positivePrices = _finalVprices.filter(p => p > 0);
+          _finalPrice = positivePrices.length > 0 ? Math.min(...positivePrices) : prodRef.precio;
+        } else {
+          _finalVprices = [];
+          _finalPrice = prodRef.precio;
+        }
+
+        // Actualizar el seed en memoria y la referencia del producto para sincronizaciones posteriores
+        if (_finalVprices.length > 0) {
+          _seed.vprices = [..._finalVprices];
+          prodRef.web_vprices = [..._finalVprices];
+          (DB.productos || []).forEach(p => {
+            if (p && p.id !== prodRef.id) {
+              const m = resolverVinculoWebProducto(p);
+              if (m && m.web_id === _wid) {
+                p.web_vprices = [..._finalVprices];
+              }
+            }
+          });
+        }
+        _seed.price = _finalPrice;
+      } else {
+        if (Array.isArray(prodRef.web_vprices) && prodRef.web_vprices.length > 0) {
+          _finalVprices = [...prodRef.web_vprices];
+          _finalPrice = Math.min(..._finalVprices.filter(p => p > 0)) || prodRef.precio;
+        } else {
+          _finalVprices = [];
+          _finalPrice = prodRef.precio;
+        }
+      }
+
+      if (FEED_PRECIOS[prodRef.id]) {
+        FEED_PRECIOS[prodRef.id] = prodRef.precio;
+      }
+
       const payload = {
         token: FN_WEB_PUBLISH_TOKEN,
         action: 'publish',
@@ -6411,7 +6491,7 @@ async function saveProducto(publishToWeb = false){
         web_id: _wid,
         stock: prodRef.stock,
         name: _isMultiSkuFamily ? _seed.name : prodRef.nombre,
-        price: (_isMultiSkuFamily && _seed.vprices?.length) ? _seed.price : prodRef.precio,
+        price: _finalPrice,
         slug: _isMultiSkuFamily ? _seed.slug : prodRef.web_slug,
         type: prodRef.web_tipo,
         cats: prodRef.web_cats,
@@ -6426,7 +6506,7 @@ async function saveProducto(publishToWeb = false){
         libre_de: prodRef.web_libre_de,
         vlabel: (_isMultiSkuFamily && _seed.vlabel) ? _seed.vlabel : prodRef.web_vlabel,
         variants: (_isMultiSkuFamily && _seed.variants?.length) ? _seed.variants : prodRef.web_variants,
-        vprices: (_isMultiSkuFamily && _seed.vprices?.length) ? _seed.vprices : prodRef.web_vprices,
+        vprices: _finalVprices,
         vimages: (_seed && _seed.vimages) ? _seed.vimages : {},
         existing_img: (_isMultiSkuFamily && !fotoBase64) ? _seed.img : prodRef.web_img,
         image_base64: fotoBase64,
