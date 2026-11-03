@@ -1637,7 +1637,7 @@ html, body {
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group"><label>Fecha</label><input type="date" id="g-fecha"></div>
-        <div class="form-group"><label>Categoría</label><select id="g-categoria"><option>Marketing / Publicidad</option><option>Materia Prima / Insumos</option><option>Logística / Envíos</option><option>Empaque y Materiales</option><option>Plataformas Digitales</option><option>Servicios Públicos</option><option>Contabilidad / Legal</option><option>Arriendo / Espacio</option><option>Comisiones de Venta</option><option>Mano de Obra</option><option>Otro</option></select></div>
+        <div class="form-group"><label>Categoría</label><select id="g-categoria"><option>Marketing / Publicidad</option><option>Materia Prima / Insumos</option><option>Logística / Envíos</option><option>Comisiones Pasarela / Bancarias</option><option>Empaque y Materiales</option><option>Plataformas Digitales</option><option>Servicios Públicos</option><option>Contabilidad / Legal</option><option>Arriendo / Espacio</option><option>Comisiones de Venta</option><option>Mano de Obra</option><option>Otro</option></select></div>
       </div>
       <div class="form-group"><label>Descripción *</label><input type="text" id="g-desc"></div>
       <div class="form-row">
@@ -2447,15 +2447,86 @@ const CAT_GASTO_LOGISTICA = 'Logística / Envíos';
 function sincronizarGastoTransporte(v) {
   if (!DB.gastos) DB.gastos = [];
   const absorbido = Math.max(0, (v.costo_transporte || 0) - (v.costo_envio || 0));
+  const noCancelado = (v.estado_envio || 'preparando') !== 'cancelado';
   const idx = DB.gastos.findIndex(g => g.id_venta === v.id && g.categoria === CAT_GASTO_LOGISTICA);
-  if (absorbido > 0) {
+  if (absorbido > 0 && noCancelado) {
     const datos = { fecha: v.fecha, categoria: CAT_GASTO_LOGISTICA, descripcion: 'Transporte venta ' + v.id,
                     monto: absorbido, tipo: 'variable', proveedor: v.transportadora || 'No aplica', id_venta: v.id };
-    if (idx >= 0) Object.assign(DB.gastos[idx], datos);
-    else DB.gastos.push({ id: uid('G'), ...datos });
+    let gastoRef;
+    if (idx >= 0) { Object.assign(DB.gastos[idx], datos); gastoRef = DB.gastos[idx]; }
+    else { gastoRef = { id: uid('G'), ...datos }; DB.gastos.push(gastoRef); }
+    if (typeof syncGastoToFirestore === 'function') syncGastoToFirestore(gastoRef, false).catch(() => {});
   } else if (idx >= 0) {
-    DB.gastos.splice(idx, 1);
+    const removed = DB.gastos.splice(idx, 1)[0];
+    if (removed && typeof syncGastoToFirestore === 'function') syncGastoToFirestore(removed, true).catch(() => {});
   }
+}
+
+// Gasto automático de Comisión por Pago con Tarjeta (Pasarela Wompi / Nequi Negocios: 3,8681% s/ total cobrado)
+const CAT_GASTO_PASARELA = 'Comisiones Pasarela / Bancarias';
+let _registrarGastoPasarelaVenta = true;
+
+function ventaUsaPasarelaTarjeta(v) {
+  if (!v) return false;
+  const mp = String(v.metodo_pago || '').toLowerCase();
+  return mp.includes('wompi') || mp.includes('tarjeta');
+}
+
+function sincronizarGastoPasarela(v) {
+  if (!v || !v.id) return;
+  if (!DB.gastos) DB.gastos = [];
+  const usaPasarela = ventaUsaPasarelaTarjeta(v);
+  const confirmado = (v.estado_pago || 'confirmado') === 'confirmado';
+  const noCancelado = (v.estado_envio || 'preparando') !== 'cancelado';
+  const autoActivo = v.registrar_gasto_pasarela !== false;
+  const totalBase = Number(v.total_pagado) || 0;
+
+  const idx = DB.gastos.findIndex(g => g.id_venta === v.id && g.categoria === CAT_GASTO_PASARELA);
+
+  if (usaPasarela && confirmado && noCancelado && autoActivo && totalBase > 0) {
+    const desg = calcDesglosePasarela(totalBase, v.costo_productos || 0);
+    const montoComision = Math.round(desg.comision);
+    if (montoComision > 0) {
+      const cli = v.id_cliente ? getCliente(v.id_cliente) : null;
+      const cliTxt = cli?.nombre ? ` (${cli.nombre})` : '';
+      const datos = {
+        fecha: v.fecha || today(),
+        categoria: CAT_GASTO_PASARELA,
+        descripcion: `Comisión pasarela 3,87% venta ${v.id}${cliTxt} · Base ${fmt(totalBase)} (Tarifa 1,99%: ${fmt(desg.tarifa)} + IVA 19%: ${fmt(desg.iva)} + ReteFuente 1,50%: ${fmt(desg.rete)})`,
+        monto: montoComision,
+        monto_exacto: Number(desg.comision.toFixed(2)),
+        tarifa_wompi: Number(desg.tarifa.toFixed(2)),
+        iva_comision: Number(desg.iva.toFixed(2)),
+        retefuente: Number(desg.rete.toFixed(2)),
+        tipo: 'variable',
+        proveedor: 'Wompi / Nequi Negocios',
+        id_venta: v.id
+      };
+      let gastoRef;
+      if (idx >= 0) {
+        Object.assign(DB.gastos[idx], datos);
+        gastoRef = DB.gastos[idx];
+      } else {
+        gastoRef = { id: uid('G'), ...datos };
+        DB.gastos.push(gastoRef);
+      }
+      v.comision_pasarela = Number(desg.comision.toFixed(2));
+      v.ingreso_neto_pasarela = Number(desg.ingresoNeto.toFixed(2));
+      if (typeof syncGastoToFirestore === 'function') {
+        syncGastoToFirestore(gastoRef, false).catch(() => {});
+      }
+      return;
+    }
+  }
+
+  if (idx >= 0) {
+    const removed = DB.gastos.splice(idx, 1)[0];
+    if (removed && typeof syncGastoToFirestore === 'function') {
+      syncGastoToFirestore(removed, true).catch(() => {});
+    }
+  }
+  v.comision_pasarela = 0;
+  delete v.ingreso_neto_pasarela;
 }
 
 // ── Firebase / Firestore Configuration (FASE 1: COLECCIONES MODULARES) ──
@@ -2891,7 +2962,11 @@ function htmlVentaFila(v) {
   if (extra > 0) det = '+ ' + fmt(extra) + ' envío';
   else if (extra < 0) det = '− ' + fmt(-extra) + ' envío';
   else if ((v.costo_transporte || 0) > 0) det = 'envío gratis';   // hubo transporte y lo asumió Frescura
-  return fmt(ventaNeta(v)) + (det ? `<div class="text-sm text-muted" style="font-weight:400">${det}</div>` : '');
+  const comPas = Number(v.comision_pasarela) || (ventaUsaPasarelaTarjeta(v) && v.estado_pago === 'confirmado' && v.registrar_gasto_pasarela !== false ? Number(((v.total_pagado || 0) * PASARELA_TOTAL_PCT).toFixed(2)) : 0);
+  const pasHtml = comPas > 0
+    ? `<div class="text-sm" style="font-weight:400;font-size:10.5px;color:#9b3a3a" title="Comisión pasarela 3,8681% s/ ${fmt(v.total_pagado||0)}: -${fmtDec(comPas)} | Ingreso neto recibido: ${fmtDec((v.total_pagado||0)-comPas)}">💳 −${fmt(comPas)} pasarela</div>`
+    : '';
+  return fmt(ventaNeta(v)) + (det ? `<div class="text-sm text-muted" style="font-weight:400">${det}</div>` : '') + pasHtml;
 }
 const totalCosto = arr => arr.reduce((a,v)=>a+(v.costo_productos||0),0);
 const totalGastos = arr => arr.reduce((a,g)=>a+(g.monto||0),0);
@@ -3292,6 +3367,8 @@ function cycleEnvio(id) {
   }
 
   v.estado_envio = next;
+  sincronizarGastoTransporte(v);
+  sincronizarGastoPasarela(v);
   saveDB(); renderVentas();
   // Sync to pedidos_dist if this is a distributor order
   if (v.dist_id) {
@@ -3340,6 +3417,7 @@ function editVenta(id){
   document.getElementById('v-guia').value=v.numero_guia||'';
   toggleCamposEnvio();
   cambiarOrigenStockVenta(v.origen_stock === 'cali' ? 'cali' : 'principal');
+  _registrarGastoPasarelaVenta = v.registrar_gasto_pasarela !== false;
   document.querySelectorAll('#v-pago-checks input').forEach(cb=>cb.checked=false);
   if(v.metodo_pago){v.metodo_pago.split(' + ').forEach(m=>{const cb=document.querySelector('#v-pago-checks input[value="'+m+'"]');if(cb)cb.checked=true;});}
   const selCli=document.getElementById('v-cliente');
@@ -3443,6 +3521,7 @@ function updateVenta(id){
   v.transporte_pagado_por=_por;
   v.total_pagado=totalBruto+envioCobrado-desc;
   v.metodo_pago=metodos.join(' + ')||'No especificado';
+  v.registrar_gasto_pasarela=_registrarGastoPasarelaVenta !== false;
   v.estado_pago=document.getElementById('v-estado-pago').value;
   v.estado_envio=document.getElementById('v-estado-envio').value||'preparando';
   v.transportadora=document.getElementById('v-transportadora').value||'';
@@ -3463,6 +3542,7 @@ function updateVenta(id){
   });
   DB.detalle_ventas.push(...items);
   sincronizarGastoTransporte(v);
+  sincronizarGastoPasarela(v);
   saveDB();
   syncVentaToFirestore(v, items).catch(e=>console.warn('[syncVenta edit]',e.message));
   items.forEach(d=>{const p=getProducto(d.id_producto);if(p)syncProductoToFirestore(p).catch(()=>{});});
@@ -3512,7 +3592,9 @@ function deleteVenta(id) {
     DB.detalle_ventas=DB.detalle_ventas.filter(d=>d.id_venta!==id);
     DB.movimientos=DB.movimientos.filter(m=>m.referencia!==id||(m.tipo!=='venta'&&m.tipo!=='venta_cali')); // limpia también el historial de movimientos
     DB.ventas=DB.ventas.filter(x=>x.id!==id);
-    DB.gastos=DB.gastos.filter(g=>!(g.id_venta===id&&g.categoria===CAT_GASTO_LOGISTICA)); // elimina el gasto de transporte ligado
+    const gastosLigados = (DB.gastos||[]).filter(g=>g.id_venta===id&&(g.categoria===CAT_GASTO_LOGISTICA||g.categoria===CAT_GASTO_PASARELA));
+    gastosLigados.forEach(g=>{if(typeof syncGastoToFirestore==='function')syncGastoToFirestore(g,true).catch(()=>{});});
+    DB.gastos=DB.gastos.filter(g=>!(g.id_venta===id&&(g.categoria===CAT_GASTO_LOGISTICA||g.categoria===CAT_GASTO_PASARELA))); // elimina gastos de transporte y pasarela ligados
     saveDB();
     syncVentaToFirestore({id}, [], true).catch(e=>console.warn('[syncVenta delete]',e.message));
     renderVentas();
@@ -4520,7 +4602,7 @@ function renderGastos() {
   let allG=[...DB.gastos].sort((a,b)=>b.fecha.localeCompare(a.fecha));
   if (catFiltro) allG = allG.filter(g => g.categoria === catFiltro);
   document.getElementById('gastos-table').innerHTML=allG.length===0?'<div class="empty"><p>Sin gastos registrados</p></div>':`<table><thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Monto</th><th>Tipo</th><th></th></tr></thead><tbody>
-    ${allG.map(g=>`<tr><td>${g.fecha}</td><td><span class="badge badge-gray" style="font-size:10px">${g.categoria.split('/')[0].trim()}</span></td><td>${g.descripcion}</td><td class="fw-600 color-red">${fmt(g.monto)}</td><td><span class="badge ${g.tipo==='fijo'?'badge-gold':g.tipo==='variable'?'badge-blue':'badge-gray'}">${g.tipo}</span></td><td><button class="btn btn-xs btn-danger" onclick="deleteGasto('${g.id}')">🗑</button></td></tr>`).join('')}
+    ${allG.map(g=>`<tr><td>${g.fecha}</td><td><span class="badge badge-gray" style="font-size:10px">${g.categoria.split('/')[0].trim()}</span>${g.id_venta?`<div style="font-size:9.5px;color:var(--ink3);margin-top:2px" class="text-mono">🔗 ${g.id_venta}</div>`:''}</td><td>${g.descripcion}</td><td class="fw-600 color-red">${fmt(g.monto)}</td><td><span class="badge ${g.tipo==='fijo'?'badge-gold':g.tipo==='variable'?'badge-blue':'badge-gray'}">${g.tipo}</span></td><td><button class="btn btn-xs btn-danger" onclick="deleteGasto('${g.id}')">🗑</button></td></tr>`).join('')}
   </tbody></table>`;
 }
 function deleteGasto(id){if(!confirm('¿Eliminar?'))return;DB.gastos=DB.gastos.filter(g=>g.id!==id);saveDB();renderGastos();}
@@ -5555,6 +5637,7 @@ function openModalVenta(){
   document.getElementById('v-envio').value=0;
   document.getElementById('v-envio-cobrado').value=0;
   _envioCobradoManual=false;
+  _registrarGastoPasarelaVenta=true;
   document.getElementById('v-descuento').value=0;
   document.querySelectorAll('#v-pago-checks input').forEach(cb=>cb.checked=false);
   document.getElementById('venta-items').innerHTML='';
@@ -5732,7 +5815,11 @@ function calcTotalVenta(){
         <div style="display:flex;justify-content:space-between;font-size:12px">
           <span class="text-muted">Utilidad neta real / Margen neto real:</span>
           <span class="text-mono fw-600 ${desgV.margenNeto>=50?'color-sage':desgV.margenNeto>=35?'color-gold':'color-red'}">${fmt(desgV.utilidadNeta)} (${desgV.margenNeto.toFixed(1)}%)</span>
-        </div>`;
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:6px;border-top:1px dotted var(--border);font-size:11.5px;font-weight:500;color:var(--ink);cursor:pointer;margin-bottom:0">
+          <input type="checkbox" id="v-registrar-gasto-pasarela" ${_registrarGastoPasarelaVenta !== false ? 'checked' : ''} style="width:auto;margin:0;accent-color:#3a5a7a" onchange="_registrarGastoPasarelaVenta=this.checked">
+          <span>🧾 Registrar automáticamente como gasto en <b>Gastos</b> (${fmt(desgV.comision)})</span>
+        </label>`;
     } else {
       pasZone.style.display = 'none';
       pasZone.innerHTML = '';
@@ -5801,7 +5888,7 @@ function saveVenta(){
   const cid=document.getElementById('v-cliente').value;
   const vid=uid('VTA');
   items.forEach(i=>i.id_venta=vid);
-  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,origen_stock:origenStock,total_bruto:totalBruto,descuento:desc,costo_envio:envioCobrado,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:_por,total_pagado:totalBruto+envioCobrado-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
+  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,origen_stock:origenStock,total_bruto:totalBruto,descuento:desc,costo_envio:envioCobrado,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:_por,total_pagado:totalBruto+envioCobrado-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',registrar_gasto_pasarela:_registrarGastoPasarelaVenta!==false,estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
   const cb=calcCashback(cid, desc, items);
   venta.cashback_generado=cb;
   // Apply cashback discount if used
@@ -5828,6 +5915,7 @@ function saveVenta(){
   if(cid){const c=getCliente(cid);if(c)c.total_historico=(c.total_historico||0)+venta.total_pagado;}
   DB.ventas.push(venta);DB.detalle_ventas.push(...items);
   sincronizarGastoTransporte(venta);
+  sincronizarGastoPasarela(venta);
   saveDB();
   syncVentaToFirestore(venta, items).catch(e=>console.warn('[syncVenta]',e.message));
   items.forEach(d=>{const p=getProducto(d.id_producto);if(p)syncProductoToFirestore(p).catch(()=>{});});
@@ -5916,6 +6004,7 @@ async function guardarDevolucion(){
     v.total_pagado = Math.max(0, (v.total_pagado||0) - monto);
     v.subtotal_productos = Math.max(0, ventaNeta(v) - monto);
     v.tiene_devolucion = true;
+    sincronizarGastoPasarela(v);
   } else if(tipo==='nota_credito'){
     const c=getCliente(v.id_cliente);
     if(c) c.nota_credito = (c.nota_credito||0) + monto;
@@ -8801,6 +8890,7 @@ async function confirmarPedidoWeb(pedidoKey) {
     DB.detalle_ventas.push(...itemsDetalle);
   }
   cliente.total_historico = (cliente.total_historico || 0) + venta.total_pagado;
+  sincronizarGastoPasarela(venta);
 
   await saveDB();
   try { syncVentaToFirestore(venta, itemsDetalle); } catch(e){}
@@ -9918,6 +10008,7 @@ function saveVentaDist() {
 
   DB.ventas.push(venta);
   DB.detalle_ventas.push(...items);
+  sincronizarGastoPasarela(venta);
   saveDB();
   closeModal('modal-venta-dist');
   updateDistConsecutivo();
