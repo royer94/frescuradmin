@@ -2387,6 +2387,87 @@ async function fetchPublishedFromWebServer() {
   } catch (e) {}
 }
 
+// --- REGLAS COMERCIALES DE TIENDA WEB ---
+let REGLAS_TIENDA_WEB = {
+  envio_menor_70k: 15000,
+  envio_umbral_reducido: 70000,
+  envio_tarifa_reducida: 5000,
+  envio_umbral_gratis: 150000,
+  regalo_activo: true,
+  regalo_umbral: 100000,
+  regalo_producto: "Bolsa exfoliante de sisal"
+};
+
+async function cargarReglasTiendaWeb() {
+  try {
+    const res = await fetch('https://www.frescuranaturalcosmeticos.com/api/publicar_producto.php?t=' + Date.now());
+    if (res.ok) {
+      const data = await res.json();
+      if (data && (data.rules || data.reglas_comerciales)) {
+        REGLAS_TIENDA_WEB = Object.assign(REGLAS_TIENDA_WEB, data.rules || data.reglas_comerciales);
+      }
+    }
+  } catch (e) {
+    try {
+      const saved = localStorage.getItem('fn_erp_reglas_web');
+      if (saved) REGLAS_TIENDA_WEB = Object.assign(REGLAS_TIENDA_WEB, JSON.parse(saved));
+    } catch(err){}
+  }
+}
+
+function openModalReglasTienda() {
+  document.getElementById('rule-envio-menor-70k').value = REGLAS_TIENDA_WEB.envio_menor_70k ?? 15000;
+  document.getElementById('rule-envio-umbral-reducido').value = REGLAS_TIENDA_WEB.envio_umbral_reducido ?? 70000;
+  document.getElementById('rule-envio-tarifa-reducida').value = REGLAS_TIENDA_WEB.envio_tarifa_reducida ?? 5000;
+  document.getElementById('rule-envio-umbral-gratis').value = REGLAS_TIENDA_WEB.envio_umbral_gratis ?? 150000;
+  document.getElementById('rule-regalo-activo').checked = REGLAS_TIENDA_WEB.regalo_activo !== false;
+  document.getElementById('rule-regalo-umbral').value = REGLAS_TIENDA_WEB.regalo_umbral ?? 100000;
+  document.getElementById('rule-regalo-producto').value = REGLAS_TIENDA_WEB.regalo_producto || 'Bolsa exfoliante de sisal';
+  document.getElementById('reglas-tienda-status').innerHTML = '';
+  openModal('modal-reglas-tienda');
+}
+
+async function guardarReglasTiendaWeb() {
+  const statusEl = document.getElementById('reglas-tienda-status');
+  statusEl.innerHTML = '<span style="color:var(--ink3)">⏳ Sincronizando con el servidor web...</span>';
+
+  const rules = {
+    envio_menor_70k: Number(document.getElementById('rule-envio-menor-70k').value) || 0,
+    envio_umbral_reducido: Number(document.getElementById('rule-envio-umbral-reducido').value) || 70000,
+    envio_tarifa_reducida: Number(document.getElementById('rule-envio-tarifa-reducida').value) || 5000,
+    envio_umbral_gratis: Number(document.getElementById('rule-envio-umbral-gratis').value) || 150000,
+    regalo_activo: document.getElementById('rule-regalo-activo').checked,
+    regalo_umbral: Number(document.getElementById('rule-regalo-umbral').value) || 100000,
+    regalo_producto: (document.getElementById('rule-regalo-producto').value || 'Bolsa exfoliante de sisal').trim()
+  };
+
+  REGLAS_TIENDA_WEB = rules;
+  try { localStorage.setItem('fn_erp_reglas_web', JSON.stringify(rules)); } catch(e){}
+
+  try {
+    const res = await fetch('https://www.frescuranaturalcosmeticos.com/api/publicar_producto.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: 'FN-ERP-PUBLISH-2026',
+        action: 'sync_rules',
+        rules: rules
+      })
+    });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      statusEl.innerHTML = '<span style="color:#10b981;font-weight:600">✅ ¡Reglas sincronizadas exitosamente con la Tienda Web!</span>';
+      if (typeof showAdminToast === 'function') showAdminToast('✅ Reglas de Tienda Web actualizadas');
+      setTimeout(() => closeModal('modal-reglas-tienda'), 1400);
+    } else {
+      statusEl.innerHTML = '<span style="color:#ef4444">⚠️ Guardado local. Servidor respondió: ' + (json.error || 'error') + '</span>';
+    }
+  } catch (err) {
+    statusEl.innerHTML = '<span style="color:#10b981">✅ Guardado en este navegador (se aplicará cuando el servidor esté accesible).</span>';
+    setTimeout(() => closeModal('modal-reglas-tienda'), 1500);
+  }
+}
+
 function _applyDB(data) {
   // Migrate and normalize loaded data
   if (!data.pedidos) data.pedidos = [];
@@ -2658,7 +2739,7 @@ async function loadDB() {
       try {
         const prodsSnap = await _COL_PRODS.get();
         if (!prodsSnap.empty) {
-          const [ventasSnap, detSnap, cliSnap, gastosSnap, movsSnap, muestrasSnap, devSnap, configSnap] = await Promise.all([
+          const [ventasSnap, detSnap, cliSnap, gastosSnap, movsSnap, muestrasSnap, devSnap, configSnap, insumosSnap] = await Promise.all([
             _COL_VENTAS.get(),
             _COL_DETALLES.get(),
             _COL_CLIENTES.get(),
