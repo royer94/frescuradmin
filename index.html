@@ -901,6 +901,7 @@ html, body {
           </select>
         </div>
         <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="openModalReglasTienda()" style="display:inline-flex;align-items:center;gap:6px">⚙️ Reglas de Envíos y Regalo</button>
           <button class="btn btn-secondary btn-sm" onclick="playOrderSound()" title="Probar sonido de notificación de pedido">🔔 Probar Sonido</button>
           <button class="btn btn-secondary btn-sm" onclick="renderPedidosWeb()">🔄 Actualizar Pedidos Web</button>
         </div>
@@ -2401,7 +2402,7 @@ function _applyDB(data) {
   data.productos.forEach(p => { if (p.tiene_descuento === undefined) p.tiene_descuento = false; if (p.web_gallery === undefined) p.web_gallery = []; });
   aplicarPreciosFeed(data.productos);
   hidratarFichasWebEnERP(data.productos);
-  setTimeout(fetchPublishedFromWebServer, 800); scheduleStockSyncToWeb();
+  setTimeout(fetchPublishedFromWebServer, 800); cargarReglasTiendaWeb(); scheduleStockSyncToWeb();
   data.clientes.forEach(c => { if (c.cashback === undefined) c.cashback = 0; delete c.puntos; if (c.club_frescura === undefined) c.club_frescura = false; if (c.nota_credito === undefined) c.nota_credito = 0; });
   // Transporte separado del monto de venta: ventas antiguas quedan con transporte 0
   (data.ventas || []).forEach(v => {
@@ -2469,7 +2470,7 @@ let _registrarGastoPasarelaVenta = true;
 function ventaUsaPasarelaTarjeta(v) {
   if (!v) return false;
   const mp = String(v.metodo_pago || '').toLowerCase();
-  return mp.includes('wompi') || mp.includes('tarjeta');
+  return mp.includes('wompi') || mp.includes('tarjeta') || mp.includes('pse') || mp.includes('link de pago');
 }
 
 function sincronizarGastoPasarela(v) {
@@ -10352,6 +10353,71 @@ async function initApp() {
 
 } // end initApp
 </script>
+
+<!-- MODAL: REGLAS TIENDA WEB -->
+<div class="modal-overlay" id="modal-reglas-tienda">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-header">
+      <span class="modal-title">⚙️ Reglas Comerciales Tienda Web (Envíos y Regalos)</span>
+      <button class="modal-close" onclick="closeModal('modal-reglas-tienda')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-strip alert-info" style="margin-bottom:16px">
+        🌐 Las modificaciones guardadas aquí se sincronizan de inmediato con la tienda web (cálculo de fletes, barra de metas de la bolsa, resumen y mensajes).
+      </div>
+
+      <div style="font-weight:700;font-size:13px;color:var(--primary);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <span>🚚 Tarifas y Umbrales de Envío</span>
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+        <div class="form-group">
+          <label>Costo envío compras &lt; $70.000 (COP)</label>
+          <input type="number" id="rule-envio-menor-70k" value="15000" placeholder="15000">
+          <small style="color:var(--ink3);font-size:11px">Si es 0, dirá "Se confirma por WhatsApp"</small>
+        </div>
+        <div class="form-group">
+          <label>Umbral tarifa reducida (COP)</label>
+          <input type="number" id="rule-envio-umbral-reducido" value="70000" placeholder="70000">
+        </div>
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div class="form-group">
+          <label>Tarifa reducida cobrada (COP)</label>
+          <input type="number" id="rule-envio-tarifa-reducida" value="5000" placeholder="5000">
+        </div>
+        <div class="form-group">
+          <label>Umbral para ENVÍO GRATIS (COP)</label>
+          <input type="number" id="rule-envio-umbral-gratis" value="150000" placeholder="150000">
+        </div>
+      </div>
+
+      <div style="font-weight:700;font-size:13px;color:var(--primary);margin:16px 0 8px;display:flex;align-items:center;gap:6px">
+        <span>🎁 Promoción de Regalo por Compra</span>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="rule-regalo-activo" checked style="width:16px;height:16px">
+          <span>Activar obsequio automático en compras grandes</span>
+        </label>
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Monto mínimo para regalo (COP)</label>
+          <input type="number" id="rule-regalo-umbral" value="100000" placeholder="100000">
+        </div>
+        <div class="form-group">
+          <label>Producto u obsequio a entregar</label>
+          <input type="text" id="rule-regalo-producto" value="Bolsa exfoliante de sisal" placeholder="Ej: Bolsa exfoliante de sisal">
+        </div>
+      </div>
+      <div id="reglas-tienda-status" style="font-size:12px;margin-top:10px;min-height:20px"></div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:space-between">
+      <button class="btn btn-secondary" onclick="closeModal('modal-reglas-tienda')">Cerrar</button>
+      <button class="btn btn-primary" onclick="guardarReglasTiendaWeb()">💾 Guardar y Sincronizar con Tienda Web</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: CONFIG API GROQ -->
 <div class="modal-overlay" id="modal-config">
