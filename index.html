@@ -1634,7 +1634,7 @@ html, body {
 <!-- MODAL: GASTO -->
 <div class="modal-overlay" id="modal-gasto">
   <div class="modal">
-    <div class="modal-header"><span class="modal-title">Registrar Gasto</span><button class="modal-close" onclick="closeModal('modal-gasto')">✕</button></div>
+    <div class="modal-header"><span class="modal-title" id="modal-gasto-title">Registrar Gasto</span><button class="modal-close" onclick="closeModal('modal-gasto')">✕</button></div>
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group"><label>Fecha</label><input type="date" id="g-fecha"></div>
@@ -2535,6 +2535,7 @@ function sincronizarGastoTransporte(v) {
     const datos = { fecha: v.fecha, categoria: CAT_GASTO_LOGISTICA, descripcion: 'Transporte venta ' + v.id,
                     monto: absorbido, tipo: 'variable', proveedor: v.transportadora || 'No aplica', id_venta: v.id };
     let gastoRef;
+    if (idx >= 0 && DB.gastos[idx].editado_manual) { return; } // el usuario lo editó a mano: no sobrescribir
     if (idx >= 0) { Object.assign(DB.gastos[idx], datos); gastoRef = DB.gastos[idx]; }
     else { gastoRef = { id: uid('G'), ...datos }; DB.gastos.push(gastoRef); }
     if (typeof syncGastoToFirestore === 'function') syncGastoToFirestore(gastoRef, false).catch(() => {});
@@ -2585,6 +2586,7 @@ function sincronizarGastoPasarela(v) {
         id_venta: v.id
       };
       let gastoRef;
+      if (idx >= 0 && DB.gastos[idx].editado_manual) { v.comision_pasarela = Number(desg.comision.toFixed(2)); v.ingreso_neto_pasarela = Number(desg.ingresoNeto.toFixed(2)); return; } // editado a mano: no sobrescribir
       if (idx >= 0) {
         Object.assign(DB.gastos[idx], datos);
         gastoRef = DB.gastos[idx];
@@ -4684,7 +4686,7 @@ function renderGastos() {
   let allG=[...DB.gastos].sort((a,b)=>b.fecha.localeCompare(a.fecha));
   if (catFiltro) allG = allG.filter(g => g.categoria === catFiltro);
   document.getElementById('gastos-table').innerHTML=allG.length===0?'<div class="empty"><p>Sin gastos registrados</p></div>':`<table><thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Monto</th><th>Tipo</th><th></th></tr></thead><tbody>
-    ${allG.map(g=>`<tr><td>${g.fecha}</td><td><span class="badge badge-gray" style="font-size:10px">${g.categoria.split('/')[0].trim()}</span>${g.id_venta?`<div style="font-size:9.5px;color:var(--ink3);margin-top:2px" class="text-mono">🔗 ${g.id_venta}</div>`:''}</td><td>${g.descripcion}</td><td class="fw-600 color-red">${fmt(g.monto)}</td><td><span class="badge ${g.tipo==='fijo'?'badge-gold':g.tipo==='variable'?'badge-blue':'badge-gray'}">${g.tipo}</span></td><td><button class="btn btn-xs btn-danger" onclick="deleteGasto('${g.id}')">🗑</button></td></tr>`).join('')}
+    ${allG.map(g=>`<tr><td>${g.fecha}</td><td><span class="badge badge-gray" style="font-size:10px">${g.categoria.split('/')[0].trim()}</span>${g.id_venta?`<div style="font-size:9.5px;color:var(--ink3);margin-top:2px" class="text-mono">🔗 ${g.id_venta}</div>`:''}</td><td>${g.descripcion}</td><td class="fw-600 color-red">${fmt(g.monto)}</td><td><span class="badge ${g.tipo==='fijo'?'badge-gold':g.tipo==='variable'?'badge-blue':'badge-gray'}">${g.tipo}</span></td><td><button class="btn btn-xs btn-secondary" onclick="editGasto('${g.id}')" title="Editar" style="margin-right:4px">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteGasto('${g.id}')">🗑</button></td></tr>`).join('')}
   </tbody></table>`;
 }
 function deleteGasto(id){if(!confirm('¿Eliminar?'))return;DB.gastos=DB.gastos.filter(g=>g.id!==id);saveDB();renderGastos();}
@@ -7059,11 +7061,37 @@ function precioEnFecha(p, fechaStr){
 // ══════════════════════════════════════════════════════════
 // MODALS — GASTO, CLIENTE, INVENTARIO, MUESTRA
 // ══════════════════════════════════════════════════════════
-function openModalGasto(){document.getElementById('g-fecha').value=today();['g-desc','g-monto','g-proveedor'].forEach(id=>document.getElementById(id).value='');openModal('modal-gasto');}
+let _gastoEditId=null;
+function openModalGasto(){_gastoEditId=null;document.getElementById('modal-gasto-title').textContent='Registrar Gasto';document.getElementById('g-fecha').value=today();['g-desc','g-monto','g-proveedor'].forEach(id=>document.getElementById(id).value='');openModal('modal-gasto');}
+function editGasto(id){
+  const g=DB.gastos.find(x=>x.id===id);if(!g)return;
+  _gastoEditId=id;
+  document.getElementById('modal-gasto-title').textContent='Editar Gasto';
+  const catSel=document.getElementById('g-categoria');
+  if(g.categoria&&![...catSel.options].some(o=>o.value===g.categoria)){catSel.add(new Option(g.categoria,g.categoria));}
+  document.getElementById('g-fecha').value=g.fecha||today();
+  catSel.value=g.categoria||'Otro';
+  document.getElementById('g-desc').value=g.descripcion||'';
+  document.getElementById('g-monto').value=g.monto||'';
+  document.getElementById('g-tipo').value=g.tipo||'variable';
+  document.getElementById('g-proveedor').value=g.proveedor||'';
+  openModal('modal-gasto');
+}
 function saveGasto(){
   const desc=document.getElementById('g-desc').value.trim();const monto=parseFloat(document.getElementById('g-monto').value)||0;
   if(!desc||!monto){alert('Descripción y monto son obligatorios');return;}
-  DB.gastos.push({id:uid('G'),fecha:document.getElementById('g-fecha').value,categoria:document.getElementById('g-categoria').value,descripcion:desc,monto,tipo:document.getElementById('g-tipo').value,proveedor:document.getElementById('g-proveedor').value});
+  const datos={fecha:document.getElementById('g-fecha').value,categoria:document.getElementById('g-categoria').value,descripcion:desc,monto,tipo:document.getElementById('g-tipo').value,proveedor:document.getElementById('g-proveedor').value};
+  if(_gastoEditId){
+    const g=DB.gastos.find(x=>x.id===_gastoEditId);
+    if(g){
+      Object.assign(g,datos);
+      if(g.id_venta) g.editado_manual=true; // gasto automático ligado a una venta: protegerlo de la re-sincronización
+      if(typeof syncGastoToFirestore==='function') syncGastoToFirestore(g,false).catch(()=>{});
+    }
+    _gastoEditId=null;
+  } else {
+    DB.gastos.push({id:uid('G'),...datos});
+  }
   saveDB();closeModal('modal-gasto');renderGastos();
 }
 
