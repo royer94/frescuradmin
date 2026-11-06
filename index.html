@@ -942,6 +942,16 @@ html, body {
       <div id="inv-cali-summary" class="mb-16"></div>
       <div id="inv-alerts" class="mb-16"></div>
       <div class="card"><div class="card-header"><span class="card-title">Inventario Actual</span><span id="inv-valor-total" class="text-sm text-muted"></span></div><div class="table-wrap" id="inventario-table"></div></div>
+      <div class="card" style="margin-top:20px" id="card-lotes-produccion">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <span class="card-title">🏭 Lotes de Producción (FormuLab Pro)</span>
+            <span class="text-sm text-muted" id="lotes-count-label" style="margin-left:8px"></span>
+          </div>
+          <button class="btn btn-secondary btn-xs" onclick="syncLotesProduccionDesdeAPI(false)" id="btn-sync-lotes" title="Sincronizar lotes de producción desde el servidor de FormuLab">🔄 Sincronizar Lotes</button>
+        </div>
+        <div class="table-wrap" id="lotes-produccion-table"></div>
+      </div>
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">Historial de Movimientos</span></div><div class="table-wrap" id="movimientos-table"></div></div>
     </div>
 
@@ -2474,6 +2484,7 @@ function _applyDB(data) {
   if (!data.muestras) data.muestras = [];
   if (!data.devoluciones) data.devoluciones = [];
   if (!data.insumos) data.insumos = [];
+  if (!data.lotes_produccion) data.lotes_produccion = [];
   (data.insumos || []).forEach(ins => {
     if (!ins.sku) ins.sku = ins.id || '';
     if (!ins.commercial_name) ins.commercial_name = ins.nombre || '';
@@ -2636,6 +2647,7 @@ const _COL_MUESTRAS = _db.collection('muestras');
 const _COL_DEVOLS   = _db.collection('devoluciones');
 const _COL_CONFIG   = _db.collection('config');
 const _COL_INSUMOS  = _db.collection('insumos');
+const _COL_LOTES    = _db.collection('lotes_produccion');
 const _DOC_LEGACY   = _db.collection('admin').doc('db');
 
 // ── Auto-Migración Inteligente: Migra datos legados hacia colecciones independientes sin pérdida ──
@@ -2763,6 +2775,7 @@ async function loadDB() {
             muestras: muestrasSnap.docs.map(d => ({ id: d.id, ...d.data() })),
             devoluciones: devSnap.docs.map(d => ({ id: d.id, ...d.data() })),
             insumos: insumosSnap.docs ? insumosSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [],
+            lotes_produccion: [],
             meta_mensual: configSnap.exists ? (configSnap.data().meta_mensual || 3000000) : 3000000
           };
           console.log('[Firebase] Datos cargados con éxito desde colecciones individuales de Firestore ✓');
@@ -2971,6 +2984,7 @@ function importData() {
         if (!DB.muestras) DB.muestras = [];
         if (!DB.devoluciones) DB.devoluciones = [];
         if (!DB.insumos) DB.insumos = [];
+        if (!DB.lotes_produccion) DB.lotes_produccion = [];
         DB.productos.forEach(p => { if (p.tiene_descuento === undefined) p.tiene_descuento = false; });
         DB.clientes.forEach(c => { if (c.cashback === undefined) c.cashback = (c.puntos||0)*1000; delete c.puntos; });
         saveDB();
@@ -4592,6 +4606,309 @@ function imprimirFacturaModal() {
   }, 400);
 }
 
+
+// ══════════════════════════════════════════════════════════
+// LOTES DE PRODUCCIÓN (FORMULAB PRO)
+// ══════════════════════════════════════════════════════════
+function _normLoteStr(s) {
+  return String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findProductoByFormulaOrName(productName, formulaId, presentation) {
+  if (!DB || !Array.isArray(DB.productos) || (!productName && !formulaId)) return null;
+  const normTarget = _normLoteStr(productName);
+  const normPres = _normLoteStr(presentation || '');
+  const fid = (formulaId || '').trim().toLowerCase();
+
+  // 1. Coincidencia directa por ID o nombre exacto
+  let found = DB.productos.find(p => (fid && p.id.toLowerCase() === fid) || _normLoteStr(p.nombre) === normTarget);
+  if (found) return found;
+
+  // 2. Contención directa de cadenas
+  found = DB.productos.find(p => {
+    const pNorm = _normLoteStr(p.nombre);
+    return (pNorm.length > 5 && normTarget.includes(pNorm)) || (normTarget.length > 5 && pNorm.includes(normTarget));
+  });
+  if (found) return found;
+
+  // 3. Puntuación por palabras clave relevantes
+  const stopWords = new Set(['con', 'sin', 'para', 'del', 'los', 'las', 'por', 'que', 'una', 'uno', 'kit', 'pack', 'combo']);
+  const targetTokens = normTarget.split(' ').filter(t => t.length >= 3 && !stopWords.has(t));
+
+  const matches = DB.productos.map(p => {
+    const pNorm = _normLoteStr(p.nombre);
+    const score = targetTokens.reduce((acc, t) => acc + (pNorm.includes(t) ? 1 : 0), 0);
+    return { p, score, pNorm };
+  }).filter(m => m.score > 0);
+
+  matches.sort((a, b) => b.score - a.score);
+
+  if (matches.length > 0 && matches[0].score >= Math.min(2, targetTokens.length)) {
+    const topScore = matches[0].score;
+    const topMatches = matches.filter(m => m.score === topScore);
+    if (topMatches.length > 1 && normPres) {
+      const presTokens = normPres.split(' ').filter(t => t.length >= 2);
+      const best = topMatches.find(m => {
+        const fullDesc = m.pNorm + ' ' + _normLoteStr(m.p.desc || '');
+        return presTokens.some(pt => fullDesc.includes(pt));
+      });
+      if (best) return best.p;
+    }
+    return topMatches[0].p;
+  }
+  return null;
+}
+
+async function procesarLoteProduccionEnERP(batch, insumosList) {
+  if (!DB.lotes_produccion) DB.lotes_produccion = [];
+  if (!DB.movimientos) DB.movimientos = [];
+  if (!DB.productos) DB.productos = [];
+
+  const loteCode = String(batch.lote_code || batch.loteCode || '').trim();
+  const productName = String(batch.product_name || batch.formulaNombre || '').trim();
+  const formulaId = String(batch.formula_id || batch.formulaId || '').trim();
+  const finishedUnits = Math.max(0, parseInt(batch.finished_units ?? batch.unidades ?? 0, 10) || 0);
+  const unitCost = Math.max(0, parseFloat(batch.unit_cost_cop ?? batch.costoUnitario ?? 0) || 0);
+  const presentation = String(batch.presentation || batch.presentacionNombre || '').trim();
+  const fecha = String(batch.fecha || today()).slice(0, 10);
+
+  if (!loteCode && !productName) {
+    return { ok: false, error: 'lote_code o product_name vacíos' };
+  }
+
+  // Clave única idempotente: lote_code + product_name
+  const uniqueKey = (loteCode + '||' + productName).toLowerCase();
+  const existingIdx = DB.lotes_produccion.findIndex(l => {
+    const curKey = ((l.lote_code || '') + '||' + (l.product_name || '')).toLowerCase();
+    return curKey === uniqueKey || (loteCode && l.lote_code === loteCode && l.product_name === productName);
+  });
+
+  const isNew = existingIdx < 0;
+  let finishedUnitsAdded = 0;
+  let prodMatched = null;
+
+  const batchRecord = {
+    ...batch,
+    lote_code: loteCode,
+    product_name: productName,
+    formula_id: formulaId,
+    finished_units: finishedUnits,
+    unit_cost_cop: unitCost,
+    presentation: presentation,
+    fecha: fecha,
+    updated_at: new Date().toISOString()
+  };
+
+  if (isNew) {
+    batchRecord.created_at = new Date().toISOString();
+    batchRecord.stock_applied = finishedUnits > 0;
+    DB.lotes_produccion.push(batchRecord);
+
+    // 2. Si el lote es nuevo y finished_units > 0, sumar al stock de producto terminado
+    if (finishedUnits > 0) {
+      prodMatched = findProductoByFormulaOrName(productName, formulaId, presentation);
+      if (prodMatched) {
+        prodMatched.stock = (prodMatched.stock || 0) + finishedUnits;
+        if (unitCost > 0) {
+          prodMatched.costo = Math.round(unitCost);
+        }
+        finishedUnitsAdded = finishedUnits;
+
+        // Registrar movimiento de inventario de tipo 'entrada' por producción
+        const movId = uid('MOV');
+        const mov = {
+          id: movId,
+          fecha: fecha,
+          id_producto: prodMatched.id,
+          tipo: 'entrada',
+          cantidad: finishedUnits,
+          costo_unitario: unitCost > 0 ? Math.round(unitCost) : (prodMatched.costo || 0),
+          referencia: loteCode,
+          nota: 'Lote de producción ' + loteCode + ' (' + (batch.operario || 'FormuLab Pro') + ')'
+        };
+        DB.movimientos.push(mov);
+
+        try { syncProductoToFirestore(prodMatched); } catch(e){}
+        try { syncMovimientoToFirestore(mov); } catch(e){}
+      }
+    }
+  } else {
+    // Idempotente: actualizar datos sin volver a sumar al stock
+    const prevApplied = DB.lotes_produccion[existingIdx].stock_applied ?? false;
+    batchRecord.created_at = DB.lotes_produccion[existingIdx].created_at || new Date().toISOString();
+    batchRecord.stock_applied = prevApplied;
+    DB.lotes_produccion[existingIdx] = batchRecord;
+  }
+
+  // 1. Actualizar catálogo de insumos si viene en el payload
+  if (Array.isArray(insumosList) && insumosList.length > 0) {
+    if (!DB.insumos) DB.insumos = [];
+    const insMap = new Map();
+    DB.insumos.forEach(i => {
+      const k = (i.sku || i.code || '').trim().toUpperCase();
+      if (k) insMap.set(k, i);
+    });
+
+    insumosList.forEach(raw => {
+      const code = (raw.code || raw.sku || '').trim().toUpperCase();
+      if (!code) return;
+      if (insMap.has(code)) {
+        const cur = insMap.get(code);
+        if (raw.stock !== undefined) cur.stock = Number(raw.stock);
+        if (raw.unit_cost !== undefined) cur.last_unit_cost = Number(raw.unit_cost);
+        if (raw.density !== undefined) cur.density_g_ml = Number(raw.density);
+        if (raw.supplier) {
+          if (!cur.suppliers) cur.suppliers = [raw.supplier];
+          else if (!cur.suppliers.includes(raw.supplier)) cur.suppliers.push(raw.supplier);
+        }
+      } else {
+        const newIns = {
+          sku: raw.code || raw.sku || code,
+          commercial_name: raw.name || raw.commercial_name || '',
+          inci_name: raw.inci || raw.inci_name || '',
+          phase_default: raw.category || raw.phase_default || 'General',
+          density_g_ml: raw.density !== undefined ? Number(raw.density) : null,
+          last_unit_cost: raw.unit_cost !== undefined ? Number(raw.unit_cost) : 0,
+          cost_unit: raw.cost_unit || 'g',
+          stock: raw.stock !== undefined ? Number(raw.stock) : 0,
+          suppliers: raw.supplier ? [raw.supplier] : [],
+          updated_at: today()
+        };
+        DB.insumos.push(newIns);
+        insMap.set(code, newIns);
+      }
+    });
+  }
+
+  // Guardar en Firestore y LocalStorage
+  try {
+    if (typeof _COL_LOTES !== 'undefined') {
+      const docId = loteCode.replace(/[^a-zA-Z0-9_-]/g, '_') || uid('LOT');
+      _COL_LOTES.doc(docId).set(batchRecord).catch(e => console.warn('[COL_LOTES]', e.message));
+    }
+  } catch(e){}
+
+  await saveDB();
+
+  return {
+    ok: true,
+    lote_code: loteCode,
+    finished_units_added: finishedUnitsAdded,
+    product_matched: prodMatched ? prodMatched.nombre : null,
+    is_new: isNew
+  };
+}
+
+async function syncLotesProduccionDesdeAPI(silent = false) {
+  const btn = document.getElementById('btn-sync-lotes');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sincronizando...'; }
+  try {
+    const url = 'https://www.frescuranaturalcosmeticos.com/api/insumos.php?t=' + Date.now();
+    const token = typeof FN_WEB_PUBLISH_TOKEN !== 'undefined' ? FN_WEB_PUBLISH_TOKEN : 'FN-ERP-PUBLISH-2026';
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ' + token
+      }
+    });
+
+    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' (' + resp.statusText + ')');
+    const data = await resp.json();
+    const lotesRemotos = data.lotes_produccion || [];
+
+    if (!Array.isArray(lotesRemotos) || lotesRemotos.length === 0) {
+      if (!silent) showAdminToast('ℹ️ No hay lotes de producción nuevos en el servidor API');
+      return;
+    }
+
+    let addedCount = 0;
+    for (const lot of lotesRemotos) {
+      const res = await procesarLoteProduccionEnERP(lot, null);
+      if (res.ok && res.is_new) addedCount++;
+    }
+
+    renderLotesProduccion();
+    renderInventario();
+
+    if (!silent) {
+      showAdminToast('✓ Sincronización exitosa: ' + lotesRemotos.length + ' lotes verificados (' + addedCount + ' nuevos ingresados al inventario)');
+    }
+  } catch(err) {
+    console.warn('[syncLotesProduccionDesdeAPI]', err);
+    if (!silent) showAdminToast('⚠️ Nota al consultar lotes en API: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Sincronizar Lotes'; }
+  }
+}
+
+function renderLotesProduccion() {
+  const container = document.getElementById('lotes-produccion-table');
+  const countLabel = document.getElementById('lotes-count-label');
+  if (!container) return;
+
+  const lotes = [...(DB.lotes_produccion || [])].sort((a, b) => {
+    const fa = a.fecha || a.created_at || '';
+    const fb = b.fecha || b.created_at || '';
+    return fb.localeCompare(fa);
+  });
+
+  if (countLabel) {
+    countLabel.textContent = lotes.length > 0 ? lotes.length + ' lote' + (lotes.length > 1 ? 's' : '') + ' registrado' + (lotes.length > 1 ? 's' : '') : 'Sin registros';
+  }
+
+  if (lotes.length === 0) {
+    container.innerHTML = '<div class="empty" style="padding:24px"><div class="empty-icon">🏭</div><p>No hay lotes de fabricación registrados aún.</p><span style="font-size:12px;color:var(--ink3)">Los lotes registrados en FormuLab Pro se sincronizarán aquí automáticamente alimentando el stock terminado.</span></div>';
+    return;
+  }
+
+  container.innerHTML = `<table>
+    <thead>
+      <tr>
+        <th>Código Lote</th>
+        <th>Fecha</th>
+        <th>Producto Terminado</th>
+        <th>Presentación</th>
+        <th>Unidades</th>
+        <th>Costo Unit.</th>
+        <th>Costo Total</th>
+        <th>Operario / QA</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${lotes.map(l => {
+        const prod = findProductoByFormulaOrName(l.product_name, l.formula_id, l.presentation);
+        return `<tr>
+          <td class="text-mono fw-600 color-sage">${l.lote_code || '—'}</td>
+          <td style="white-space:nowrap;font-size:12px">${l.fecha || '—'}</td>
+          <td>
+            <div class="fw-600">${l.product_name || '—'}</div>
+            ${prod ? `<div style="font-size:10px;color:var(--ink3);margin-top:2px" class="text-mono">🔗 ${prod.nombre} (${prod.id})</div>` : `<div style="font-size:10px;color:var(--warn);margin-top:2px">⚠️ No vinculado a producto ERP</div>`}
+          </td>
+          <td style="font-size:12px">${l.presentation || (l.batch_size_g ? l.batch_size_g + ' g' : '—')}</td>
+          <td class="fw-600 color-sage" style="font-size:13px">+${l.finished_units || 0} u</td>
+          <td style="white-space:nowrap">${l.unit_cost_cop ? fmt(l.unit_cost_cop) : '—'}</td>
+          <td style="white-space:nowrap;font-weight:600">${l.total_cost_cop ? fmt(l.total_cost_cop) : (l.unit_cost_cop && l.finished_units ? fmt(l.unit_cost_cop * l.finished_units) : '—')}</td>
+          <td style="font-size:11px;color:var(--ink2)">
+            <div>${l.operario || 'Operario'}</div>
+            ${l.verificador_qa ? `<div style="font-size:10px;color:var(--ink3)">QA: ${l.verificador_qa}</div>` : ''}
+          </td>
+          <td>
+            <span class="badge badge-green" style="font-size:10px">✓ En Stock</span>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
 // ══════════════════════════════════════════════════════════
 // INVENTARIO
 // ══════════════════════════════════════════════════════════
@@ -4651,6 +4968,7 @@ function renderInventario() {
   document.getElementById('movimientos-table').innerHTML=movs.length===0?'<div class="empty"><p>Sin movimientos</p></div>':`<table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Nota</th></tr></thead><tbody>
     ${movs.map(m=>{const p=getProducto(m.id_producto);return`<tr><td>${m.fecha}</td><td>${p?.nombre||m.id_producto}</td><td><span class="badge ${tipoColor[m.tipo]||'badge-gray'}">${tipoLabel[m.tipo]||m.tipo}</span></td><td class="${m.cantidad>0?'color-sage':'color-red'}">${m.cantidad>0?'+':''}${m.cantidad}</td><td class="text-muted">${m.nota||'—'}</td></tr>`}).join('')}
   </tbody></table>`;
+  renderLotesProduccion();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -5195,6 +5513,7 @@ async function syncInsumosFromAPI(silent = false) {
     const diff = previousCount - cleanList.length;
     if (!silent) {
       showAdminToast(`✓ Sincronizados ${cleanList.length} insumos oficiales de FormuLab (${diff > 0 ? diff + ' obsoletos depurados' : 'Catálogo al día'})`);
+      syncLotesProduccionDesdeAPI(true);
     }
   } catch (err) {
     console.error('[syncInsumosFromAPI]', err);
@@ -10361,6 +10680,7 @@ async function initApp() {
 
   // Ejecutar sync inicial y cada 20 segundos
   setTimeout(syncHostingerOrders, 3000);
+  setTimeout(() => { if (typeof syncLotesProduccionDesdeAPI === 'function') syncLotesProduccionDesdeAPI(true); }, 5000);
   setInterval(syncHostingerOrders, 20000);
 
 
