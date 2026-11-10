@@ -2014,10 +2014,7 @@ function resolverVinculoWebProducto(p) {
 
   // 4. Champús Sólidos (Fichas individuales independientes en la tienda web para cada tratamiento)
   if ((n.includes('champu') || n.includes('shampoo')) && n.includes('solido')) {
-    if (n.includes('lavanda')) {
-      return { web_id: 'prod_01M1N1JPAQ43ABZR91Q9VGGHSP', variant: '' };
-    }
-    // Para Árbol de Té, Romero u otras variedades, cada una es un producto propio e individual
+    // Cada variedad (Árbol de Té, Romero, Lavanda, etc.) se gestiona como producto individual propio
     return { web_id: p.web_id || p.id, variant: '' };
   }
 
@@ -7424,6 +7421,15 @@ function populateWebFieldsModal(p){
     document.getElementById('p-web-zona').value = p.web_zona || '';
     document.getElementById('p-web-libre-de').value = p.web_libre_de || 'Parabenos, sulfatos y químicos agresivos';
     document.getElementById('p-web-modo-uso').value = p.web_modo_uso || '';
+    if ((pNomLow.includes('champu') || pNomLow.includes('shampoo')) && p.web_variants?.length) {
+      p.web_variants = [];
+      p.web_vlabel = '';
+      p.web_vprices = [];
+    }
+    if (!p.web_img && (pNomLow.includes('champu') || pNomLow.includes('shampoo'))) {
+      if (pNomLow.includes('romero')) p.web_img = 'assets/productos/ed048deb18e56a4398.webp';
+      else if (pNomLow.includes('lavanda')) p.web_img = 'assets/productos/07c8f281ab3a36f0d8.webp';
+    }
     document.getElementById('p-web-vlabel').value = p.web_vlabel || '';
     document.getElementById('p-web-variants').value = Array.isArray(p.web_variants) ? p.web_variants.join(', ') : (p.web_variants || '');
     const _mP = resolverVinculoWebProducto(p);
