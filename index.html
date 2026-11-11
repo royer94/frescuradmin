@@ -1593,6 +1593,11 @@ html, body {
             <label>Modo de uso recomendado</label>
             <textarea id="p-web-modo-uso" rows="2" placeholder="Ej: Aplicar sobre la piel húmeda masajeando suavemente con movimientos circulares y enjuagar con abundante agua."></textarea>
           </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Envíos y Pagos (Texto del acordeón web)</label>
+            <textarea id="p-web-envios-pagos" rows="2" placeholder="Dejar vacío para usar el texto general de la tienda..."></textarea>
+            <span style="font-size:11px;color:var(--ink3)">Si lo dejas vacío, tomará el texto estándar configurado en las Reglas de la Tienda Web.</span>
+          </div>
         </div>
 
         <!-- Variantes opcionales -->
@@ -2495,6 +2500,7 @@ function openModalReglasTienda() {
   document.getElementById('rule-regalo-activo').checked = REGLAS_TIENDA_WEB.regalo_activo !== false;
   document.getElementById('rule-regalo-umbral').value = REGLAS_TIENDA_WEB.regalo_umbral ?? 100000;
   document.getElementById('rule-regalo-producto').value = REGLAS_TIENDA_WEB.regalo_producto || 'Bolsa exfoliante de sisal';
+  document.getElementById('rule-texto-envios-pagos').value = REGLAS_TIENDA_WEB.texto_envios_pagos || "Compras menores a $70.000: envío $15.000. Desde $70.000: envío $5.000. Desde $100.000: incluye regalo. Desde $150.000: envío gratis.\n\nPaga en línea al instante con tarjeta de crédito, débito o PSE a través de Wompi, o por Nequi, DaviPlata y Bre-B.";
   document.getElementById('reglas-tienda-status').innerHTML = '';
   openModal('modal-reglas-tienda');
 }
@@ -2510,7 +2516,8 @@ async function guardarReglasTiendaWeb() {
     envio_umbral_gratis: Number(document.getElementById('rule-envio-umbral-gratis').value) || 150000,
     regalo_activo: document.getElementById('rule-regalo-activo').checked,
     regalo_umbral: Number(document.getElementById('rule-regalo-umbral').value) || 100000,
-    regalo_producto: (document.getElementById('rule-regalo-producto').value || 'Bolsa exfoliante de sisal').trim()
+    regalo_producto: (document.getElementById('rule-regalo-producto').value || 'Bolsa exfoliante de sisal').trim(),
+    texto_envios_pagos: (document.getElementById('rule-texto-envios-pagos')?.value || '').trim()
   };
 
   REGLAS_TIENDA_WEB = rules;
@@ -7428,7 +7435,7 @@ function clearProductoWebFoto(){
 }
 
 function populateWebFieldsModal(p){
-  const fields = ['p-web-ingredientes','p-web-resumen','p-web-slug','p-web-presentacion','p-web-beneficio','p-web-piel','p-web-zona','p-web-libre-de','p-web-modo-uso','p-web-vlabel','p-web-variants','p-web-vprices','p-web-foto-base64','p-web-foto-existing'];
+  const fields = ['p-web-ingredientes','p-web-resumen','p-web-slug','p-web-presentacion','p-web-beneficio','p-web-piel','p-web-zona','p-web-libre-de','p-web-modo-uso','p-web-envios-pagos','p-web-vlabel','p-web-variants','p-web-vprices','p-web-foto-base64','p-web-foto-existing'];
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   const fileEl = document.getElementById('p-web-foto-file');
   if(fileEl) fileEl.value = '';
@@ -7472,6 +7479,7 @@ function populateWebFieldsModal(p){
     document.getElementById('p-web-zona').value = p.web_zona || '';
     document.getElementById('p-web-libre-de').value = p.web_libre_de || 'Parabenos, sulfatos y químicos agresivos';
     document.getElementById('p-web-modo-uso').value = p.web_modo_uso || '';
+    document.getElementById('p-web-envios-pagos').value = p.web_envios_pagos || '';
     if ((pNomLow.includes('champu') || pNomLow.includes('shampoo')) && p.web_variants?.length) {
       p.web_variants = [];
       p.web_vlabel = '';
@@ -7768,6 +7776,7 @@ async function saveProducto(publishToWeb = false){
     web_zona: document.getElementById('p-web-zona')?.value.trim() || '',
     web_libre_de: document.getElementById('p-web-libre-de')?.value.trim() || 'Parabenos, sulfatos y químicos agresivos',
     web_modo_uso: document.getElementById('p-web-modo-uso')?.value.trim() || '',
+    web_envios_pagos: document.getElementById('p-web-envios-pagos')?.value.trim() || '',
     web_vlabel: document.getElementById('p-web-vlabel')?.value.trim() || '',
     web_variants: webVariants,
     web_vprices: webVprices,
@@ -7881,6 +7890,7 @@ async function saveProducto(publishToWeb = false){
         zona_uso: prodRef.web_zona,
         modo_uso: prodRef.web_modo_uso,
         libre_de: prodRef.web_libre_de,
+        envios_pagos: prodRef.web_envios_pagos || '',
         vlabel: (_isMultiSkuFamily && _seed.vlabel) ? _seed.vlabel : prodRef.web_vlabel,
         variants: (_isMultiSkuFamily && _seed.variants?.length) ? _seed.variants : prodRef.web_variants,
         vprices: _finalVprices,
@@ -11441,6 +11451,16 @@ async function initApp() {
           <input type="text" id="rule-regalo-producto" value="Bolsa exfoliante de sisal" placeholder="Ej: Bolsa exfoliante de sisal">
         </div>
       </div>
+
+      <div style="font-weight:700;font-size:13px;color:var(--primary);margin:16px 0 8px;display:flex;align-items:center;gap:6px">
+        <span>📄 Texto para el Acordeón "Envíos y Pagos" (Ficha del Producto)</span>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Texto predeterminado para todas las páginas de producto</label>
+        <textarea id="rule-texto-envios-pagos" rows="3" style="width:100%;font-size:12px;box-sizing:border-box" placeholder="Compras menores a $70.000: envío $15.000. Desde $70.000: envío $5.000..."></textarea>
+        <small style="color:var(--ink3);font-size:11px">Aparece en el acordeón desplegable 'Envíos y pagos' de la web. Puedes escribir párrafos separados por salto de línea.</small>
+      </div>
+
       <div id="reglas-tienda-status" style="font-size:12px;margin-top:10px;min-height:20px"></div>
     </div>
     <div class="modal-footer" style="display:flex;justify-content:space-between">
