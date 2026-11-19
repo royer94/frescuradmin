@@ -91,10 +91,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // Distribuidores: lectura de perfil propio o admin; escritura admin
+    // Distribuidores: lectura para autenticados; creación para dueño del uid; actualización admin o perfil propio
     match /distribuidores/{distId} {
-      allow read: if isAdmin() || isDistributorOwner(distId);
-      allow write: if isAdmin() || (isDistributorOwner(distId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['telefono', 'municipio', 'direccion', 'banco', 'cuenta']));
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == distId;
+      allow update, delete: if isAdmin() || (isDistributorOwner(distId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['telefono', 'municipio', 'direccion', 'banco', 'cuenta', 'meta_ventas', 'onboarding_completado', 'onboarding_completado_en', 'onboarding_quiz_score', 'onboarding_quiz_aprobado', 'onboarding_quiz_en', 'terminos_aceptados', 'terminos_aceptados_en', 'independencia_aceptada', 'tratamiento_datos_aceptado', 'tratamiento_datos_aceptado_en', 'declaracion_veracidad_aceptada', 'puntos_disponibles', 'puntos_lotes']));
     }
     
     // Pedidos de distribuidores: distribuidor crea y lee los suyos; admin gestiona todo

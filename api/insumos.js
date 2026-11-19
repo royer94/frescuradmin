@@ -567,9 +567,36 @@ module.exports = async (req, res) => {
           );
 
           if (matchedProd) {
-            matchedProd.stock = (Number(matchedProd.stock) || 0) + finishedUnits;
-            if (unitCostCop > 0) {
-              matchedProd.costo = Math.round(unitCostCop);
+            const prevStock = Number(matchedProd.stock) || 0;
+            const prevCosto = Math.round(Number(matchedProd.costo) || 0);
+            const batchCosto = unitCostCop > 0 ? Math.round(unitCostCop) : prevCosto;
+            if (!Array.isArray(matchedProd.lotes_costo)) {
+              matchedProd.lotes_costo = prevStock > 0 ? [{
+                id: `LOT-BASE-${matchedProd.id}`,
+                fecha: '2026-01-01',
+                costo: prevCosto,
+                cantidad_inicial: prevStock,
+                restante: prevStock,
+                nota: 'Stock previo / Lote anterior',
+                referencia: 'BASE'
+              }] : [];
+            }
+            matchedProd.lotes_costo.push({
+              id: `LOT-${loteCode}`,
+              fecha,
+              costo: batchCosto,
+              cantidad_inicial: finishedUnits,
+              restante: finishedUnits,
+              nota: `Producción ${loteCode}`,
+              referencia: loteCode
+            });
+            matchedProd.lotes_costo.sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+            matchedProd.stock = prevStock + finishedUnits;
+            const firstActive = matchedProd.lotes_costo.find(l => (Number(l.restante) || 0) > 0);
+            if (firstActive) {
+              matchedProd.costo = Math.round(Number(firstActive.costo) || 0);
+            } else if (unitCostCop > 0) {
+              matchedProd.costo = batchCosto;
             }
             if (formulaId) {
               matchedProd.formula_id = formulaId;

@@ -1730,19 +1730,66 @@ html, body {
 <!-- MODAL: ENTRADA INVENTARIO -->
 <div class="modal-overlay" id="modal-entrada">
   <div class="modal">
-    <div class="modal-header"><span class="modal-title">Entrada de Inventario</span><button class="modal-close" onclick="closeModal('modal-entrada')">✕</button></div>
+    <div class="modal-header"><span class="modal-title">Entrada de Inventario (Nuevo Lote PEPS)</span><button class="modal-close" onclick="closeModal('modal-entrada')">✕</button></div>
     <div class="modal-body">
       <div class="form-row">
-        <div class="form-group"><label>Producto</label><select id="e-producto"></select></div>
+        <div class="form-group"><label>Producto</label><select id="e-producto" onchange="onEntradaProductoChange()"></select></div>
         <div class="form-group"><label>Cantidad</label><input type="number" id="e-cantidad" min="1"></div>
       </div>
+      <div id="e-fifo-info" style="font-size:12px;color:var(--ink2);background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;display:none"></div>
       <div class="form-row">
         <div class="form-group"><label>Fecha</label><input type="date" id="e-fecha"></div>
-        <div class="form-group"><label>Costo Unitario (COP)</label><input type="number" id="e-costo"></div>
+        <div class="form-group"><label>Costo Unitario de este lote (COP) *</label><input type="number" id="e-costo" min="0" step="1" placeholder="Ej: 2500"></div>
       </div>
-      <div class="form-group"><label>Nota</label><input type="text" id="e-nota"></div>
+      <div class="form-group"><label>Nota / Proveedor / Factura</label><input type="text" id="e-nota" placeholder="Ej: Compra nuevo lote proveedor..."></div>
+      <div style="font-size:11px;color:var(--ink3)">ℹ️ Se creará un nuevo lote PEPS (FIFO): primero se agotarán las unidades anteriores al costo previo y luego saldrán las de este lote a este nuevo costo.</div>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-entrada')">Cancelar</button><button class="btn btn-primary" onclick="saveEntrada()">Registrar</button></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-entrada')">Cancelar</button><button class="btn btn-primary" onclick="saveEntrada()">Registrar Lote</button></div>
+  </div>
+</div>
+
+<!-- MODAL: LOTES DE COSTO PEPS / FIFO -->
+<div class="modal-overlay" id="modal-lotes-fifo" onclick="if(event.target===this)closeModal('modal-lotes-fifo')">
+  <div class="modal modal-lg" style="max-width:740px">
+    <div class="modal-header">
+      <div>
+        <span class="modal-title" id="lf-modal-title">📦 Lotes PEPS / FIFO</span>
+        <div id="lf-modal-sub" style="font-size:12px;color:var(--ink3);margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-lotes-fifo')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="lf-prod-id">
+      <div id="lf-summary" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px">Capas activas en Bodega Principal (orden de salida PEPS ↑)</span>
+        <button type="button" class="btn btn-xs btn-secondary" onclick="addRowModalLotesFifo()">+ Agregar capa / lote</button>
+      </div>
+      <div class="table-wrap" style="border:1px solid var(--border);border-radius:var(--r);margin-bottom:12px">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th style="width:95px">Restante</th>
+              <th style="width:120px">Costo Unit. (COP)</th>
+              <th>Nota / Referencia</th>
+              <th style="text-align:right">Subtotal</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody id="lf-tbody"></tbody>
+        </table>
+      </div>
+      <div id="lf-cali-zone" style="display:none;margin-bottom:12px"></div>
+      <div id="lf-exhausted-zone" style="display:none"></div>
+      <div style="font-size:11px;color:var(--ink3);line-height:1.5">
+        💡 Las ventas consumen primero la fila superior (lote más antiguo). Si ajustas cantidades o costos aquí, el stock total y el costo vigente del producto se actualizarán automáticamente.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-lotes-fifo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveModalLotesFifo()">💾 Guardar Lotes PEPS</button>
+    </div>
   </div>
 </div>
 
@@ -2573,6 +2620,7 @@ function _applyDB(data) {
     if (v.subtotal_productos === undefined) v.subtotal_productos = v.total_pagado || 0;
   });
   DB = data;
+  if (typeof initFifoLotesAll === 'function') initFifoLotesAll(DB);
   recalcCashbackHistorico();
   setTimeout(actualizarBadgeReposicion, 300);
 }
@@ -3056,6 +3104,7 @@ function importData() {
         if (!DB.insumos) DB.insumos = [];
         if (!DB.lotes_produccion) DB.lotes_produccion = [];
         DB.productos.forEach(p => { if (p.tiene_descuento === undefined) p.tiene_descuento = false; });
+        if (typeof initFifoLotesAll === 'function') initFifoLotesAll(DB);
         DB.clientes.forEach(c => { if (c.cashback === undefined) c.cashback = (c.puntos||0)*1000; delete c.puntos; });
         saveDB();
         localStorage.setItem('frescura_db_version', DB_VERSION);
@@ -3664,28 +3713,50 @@ function updateVenta(id){
   const prevDetails = getVentaDetalle(id);
   const nuevoOrigen = document.querySelector('input[name="v-origen-stock"]:checked')?.value || 'principal';
 
-  // Restaurar temporalmente el stock anterior para validar con precisión
-  prevDetails.forEach(d=>{
-    const p=getProducto(d.id_producto);
-    if(p){
-      if(prevOrigen==='cali') p.stock_cali=(p.stock_cali||0)+d.cantidad;
-      else p.stock+=d.cantidad;
-    }
+  // Snapshot atómico de productos afectados (permite rollback exacto PEPS si falla validación)
+  const snapMap = new Map();
+  const snapshotProd = (p) => {
+    if (!p || snapMap.has(p.id)) return;
+    ensureFifoLotesProducto(p);
+    snapMap.set(p.id, {
+      stock: p.stock,
+      stock_cali: p.stock_cali || 0,
+      costo: p.costo,
+      lotes_costo: JSON.parse(JSON.stringify(p.lotes_costo || [])),
+      lotes_costo_cali: JSON.parse(JSON.stringify(p.lotes_costo_cali || []))
+    });
+  };
+  prevDetails.forEach(d => snapshotProd(getProducto(d.id_producto)));
+  document.querySelectorAll('#venta-items .form-row').forEach(row => {
+    const pid = row.querySelector('.vi-prod')?.value;
+    if (pid) snapshotProd(getProducto(pid));
   });
 
   const revertTempStock = () => {
-    prevDetails.forEach(d=>{
-      const p=getProducto(d.id_producto);
-      if(p){
-        if(prevOrigen==='cali') p.stock_cali=Math.max(0,(p.stock_cali||0)-d.cantidad);
-        else p.stock=Math.max(0,p.stock-d.cantidad);
+    snapMap.forEach((snap, pid) => {
+      const p = getProducto(pid);
+      if (p) {
+        p.stock = snap.stock;
+        p.stock_cali = snap.stock_cali;
+        p.costo = snap.costo;
+        p.lotes_costo = snap.lotes_costo;
+        p.lotes_costo_cali = snap.lotes_costo_cali;
       }
     });
   };
 
+  // Restaurar temporalmente los lotes PEPS anteriores de esta venta
+  prevDetails.forEach(d=>{
+    const p=getProducto(d.id_producto);
+    if(p){
+      restoreFifoLotesProducto(p, d.lotes_consumidos, d.cantidad, d.costo_unitario, prevOrigen, v.fecha, d.cantidad);
+    }
+  });
+
   const items=[];let totalBruto=0,costoProd=0,valid=true;
   const fechaVenta=document.getElementById('v-fecha').value||v.fecha;
   document.querySelectorAll('#venta-items .form-row').forEach(row=>{
+    if(!valid)return;
     const prod=row.querySelector('.vi-prod');const qty=parseInt(row.querySelector('.vi-qty')?.value)||0;
     if(!prod?.value||qty<=0){valid=false;return;}
     const p=getProducto(prod.value);if(!p)return;
@@ -3694,10 +3765,11 @@ function updateVenta(id){
       alert(`Stock insuficiente en ${nuevoOrigen==='cali'?'📍 Stock Cali':'Bodega Principal'}: ${p.nombre} (${disp} disponibles)`);
       valid=false;return;
     }
+    const fifoRes = consumeFifoLotesProducto(p, qty, nuevoOrigen);
     const frozen=row.querySelector('.vi-precio-frozen')?.value;
     const precio=(frozen!==''&&frozen!=null)?parseFloat(frozen):precioEnFecha(p, fechaVenta);
-    totalBruto+=precio*qty;costoProd+=p.costo*qty;
-    items.push({id:uid('DET'),id_venta:id,id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:p.costo,subtotal:precio*qty});
+    totalBruto+=precio*qty;costoProd+=fifoRes.costoTotal;
+    items.push({id:uid('DET'),id_venta:id,id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:fifoRes.costoUnitarioPromedio,lotes_consumidos:fifoRes.desglose,subtotal:precio*qty});
   });
   if(!valid||items.length===0){
     revertTempStock();
@@ -3732,7 +3804,7 @@ function updateVenta(id){
   v.estado_envio=document.getElementById('v-estado-envio').value||'preparando';
   v.transportadora=document.getElementById('v-transportadora').value||'';
   v.numero_guia=document.getElementById('v-guia').value.trim()||'';
-  v.costo_productos=costoProd;
+  v.costo_productos=Math.round(costoProd);
   const cb=calcCashback(cid,desc,items);
   v.cashback_generado=cb;
   if(cb>0&&cid&&v.estado_pago==='confirmado'){const c=getCliente(cid);if(c)c.cashback=(c.cashback||0)+cb;}
@@ -3741,9 +3813,7 @@ function updateVenta(id){
   items.forEach(d=>{
     const p=getProducto(d.id_producto);
     if(p){
-      if(nuevoOrigen==='cali') p.stock_cali=Math.max(0,(p.stock_cali||0)-d.cantidad);
-      else p.stock-=d.cantidad;
-      DB.movimientos.push({id:uid('MOV'),fecha:v.fecha,id_producto:p.id,tipo:nuevoOrigen==='cali'?'venta_cali':'venta',cantidad:-d.cantidad,costo_unitario:d.costo_unitario,referencia:id,nota:'Venta '+id+(nuevoOrigen==='cali'?' (📍 Stock Cali · editada)':' (editada)')});
+      DB.movimientos.push({id:uid('MOV'),fecha:v.fecha,id_producto:p.id,tipo:nuevoOrigen==='cali'?'venta_cali':'venta',cantidad:-d.cantidad,costo_unitario:d.costo_unitario,lotes_consumidos:d.lotes_consumidos,referencia:id,nota:'Venta '+id+(nuevoOrigen==='cali'?' (📍 Stock Cali · editada)':' (editada)')});
     }
   });
   DB.detalle_ventas.push(...items);
@@ -3751,7 +3821,7 @@ function updateVenta(id){
   sincronizarGastoPasarela(v);
   saveDB();
   syncVentaToFirestore(v, items).catch(e=>console.warn('[syncVenta edit]',e.message));
-  items.forEach(d=>{const p=getProducto(d.id_producto);if(p)syncProductoToFirestore(p).catch(()=>{});});
+  snapMap.forEach((_, pid) => { const p = getProducto(pid); if (p) syncProductoToFirestore(p).catch(()=>{}); });
   closeModal('modal-venta');
   if (v.dist_id) {
     _db.collection('pedidos_dist').doc(id).update({estado_envio:v.estado_envio, transportadora:v.transportadora, numero_guia:v.numero_guia})
@@ -3790,8 +3860,7 @@ function deleteVenta(id) {
     getVentaDetalle(id).forEach(d=>{
       const p=getProducto(d.id_producto);
       if(p){
-        if(orig==='cali') p.stock_cali=(p.stock_cali||0)+d.cantidad;
-        else p.stock+=d.cantidad;
+        restoreFifoLotesProducto(p, d.lotes_consumidos, d.cantidad, d.costo_unitario, orig, v.fecha, d.cantidad);
         syncProductoToFirestore(p).catch(()=>{});
       }
     });
@@ -5394,10 +5463,15 @@ async function procesarLoteProduccionEnERP(batch, insumosList) {
     if (finishedUnits > 0) {
       prodMatched = findProductoByFormulaOrName(productName, formulaId, presentation, presentationQty, presentationUnit);
       if (prodMatched) {
-        prodMatched.stock = (Number(prodMatched.stock) || 0) + finishedUnits;
-        if (unitCost > 0) {
-          prodMatched.costo = Math.round(unitCost);
-        }
+        const costoBatch = unitCost > 0 ? Math.round(unitCost) : (prodMatched.costo || 0);
+        addFifoLoteProducto(prodMatched, {
+          fecha: fecha,
+          cantidad: finishedUnits,
+          costo: costoBatch,
+          nota: 'Lote de producción ' + loteCode + ' (' + (operario || 'FormuLab Pro') + ')',
+          referencia: loteCode,
+          origen: 'principal'
+        });
         if (formulaId) {
           prodMatched.formula_id = formulaId;
         }
@@ -5415,7 +5489,7 @@ async function procesarLoteProduccionEnERP(batch, insumosList) {
             id_producto: prodMatched.id,
             tipo: 'entrada',
             cantidad: finishedUnits,
-            costo_unitario: unitCost > 0 ? Math.round(unitCost) : (prodMatched.costo || 0),
+            costo_unitario: costoBatch,
             referencia: loteCode,
             nota: 'Lote de producción ' + loteCode + ' (' + (operario || 'FormuLab Pro') + ')'
           };
@@ -5682,6 +5756,554 @@ function renderLotesProduccion() {
 }
 
 // ══════════════════════════════════════════════════════════
+// MOTOR PEPS / FIFO DE COSTOS POR LOTES
+// ══════════════════════════════════════════════════════════
+function _fifoSortAsc(arr) {
+  return arr.sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+}
+
+function _reconcileLotesWithStock(p, origen = 'principal') {
+  if (!p) return;
+  const stockField = origen === 'cali' ? 'stock_cali' : 'stock';
+  const lotesField = origen === 'cali' ? 'lotes_costo_cali' : 'lotes_costo';
+  const curStock = Math.max(0, parseInt(p[stockField], 10) || 0);
+  if (!Array.isArray(p[lotesField])) p[lotesField] = [];
+
+  p[lotesField] = p[lotesField]
+    .filter(l => l && typeof l === 'object')
+    .map(l => ({
+      id: l.id || uid('LOT'),
+      fecha: String(l.fecha || today()).slice(0, 10),
+      costo: Math.max(0, Number(l.costo) || 0),
+      cantidad_inicial: Math.max(0, parseInt(l.cantidad_inicial ?? l.restante ?? 0, 10) || 0),
+      restante: Math.max(0, parseInt(l.restante, 10) || 0),
+      nota: l.nota || '',
+      referencia: l.referencia || '',
+      origin_lote_id: l.origin_lote_id || ''
+    }));
+
+  _fifoSortAsc(p[lotesField]);
+  let sumRest = p[lotesField].reduce((s, l) => s + l.restante, 0);
+
+  if (sumRest < curStock) {
+    const diff = curStock - sumRest;
+    p[lotesField].push({
+      id: uid('LOT'),
+      fecha: today(),
+      costo: Math.max(0, Number(p.costo) || 0),
+      cantidad_inicial: diff,
+      restante: diff,
+      nota: origen === 'cali' ? 'Stock existente en Cali' : 'Stock base / ajuste',
+      referencia: 'SYNC'
+    });
+  } else if (sumRest > curStock) {
+    let excess = sumRest - curStock;
+    for (let i = 0; i < p[lotesField].length && excess > 0; i++) {
+      const l = p[lotesField][i];
+      if (l.restante <= 0) continue;
+      const take = Math.min(l.restante, excess);
+      l.restante -= take;
+      excess -= take;
+    }
+  }
+
+  // Limpiar lotes agotados antiguos si hay demasiados (>25) manteniendo los activos + últimos 10 agotados
+  const activos = p[lotesField].filter(l => l.restante > 0);
+  const agotados = p[lotesField].filter(l => l.restante <= 0);
+  if (agotados.length > 10) {
+    p[lotesField] = [...agotados.slice(-10), ...activos];
+    _fifoSortAsc(p[lotesField]);
+  }
+
+  if (origen === 'principal' && activos.length > 0) {
+    p.costo = Math.round(activos[0].costo);
+  }
+}
+
+function initFifoLotesProducto(p, movimientosList = null) {
+  if (!p) return;
+  const movsSource = Array.isArray(movimientosList) ? movimientosList : (DB?.movimientos || []);
+
+  if (!Array.isArray(p.lotes_costo)) {
+    const curStock = Math.max(0, parseInt(p.stock, 10) || 0);
+    if (curStock === 0) {
+      p.lotes_costo = [];
+    } else {
+      // Reconstruir capas desde la entrada más reciente hacia atrás hasta cubrir el stock actual
+      const entradas = movsSource
+        .map((m, idx) => ({ m, idx }))
+        .filter(x => x.m && x.m.id_producto === p.id && x.m.tipo === 'entrada' && Number(x.m.cantidad) > 0)
+        .sort((a, b) => {
+          const cmp = String(b.m.fecha || '').localeCompare(String(a.m.fecha || ''));
+          return cmp !== 0 ? cmp : (b.idx - a.idx);
+        });
+
+      let remaining = curStock;
+      const reconstructed = [];
+      for (const { m } of entradas) {
+        if (remaining <= 0) break;
+        const qtyM = Math.max(1, Math.round(Number(m.cantidad)));
+        const take = Math.min(remaining, qtyM);
+        const mCost = Number(m.costo_unitario) > 0 ? Math.round(Number(m.costo_unitario)) : (Number(p.costo) || 0);
+        reconstructed.unshift({
+          id: 'LOT-' + (m.id || uid('M')),
+          fecha: String(m.fecha || today()).slice(0, 10),
+          costo: mCost,
+          cantidad_inicial: qtyM,
+          restante: take,
+          nota: m.nota || 'Entrada registrada',
+          referencia: m.referencia || m.id || ''
+        });
+        remaining -= take;
+      }
+
+      if (remaining > 0) {
+        const oldestDate = reconstructed.length ? reconstructed[0].fecha : today();
+        let baseDate = '2026-01-01';
+        if (oldestDate && oldestDate > '2026-01-02') {
+          const dt = new Date(oldestDate + 'T12:00:00Z');
+          dt.setUTCDate(dt.getUTCDate() - 1);
+          baseDate = dt.toISOString().slice(0, 10);
+        }
+        reconstructed.unshift({
+          id: uid('LOT'),
+          fecha: baseDate,
+          costo: Math.max(0, Number(p.costo) || 0),
+          cantidad_inicial: remaining,
+          restante: remaining,
+          nota: 'Stock previo / Lote anterior',
+          referencia: 'BASE'
+        });
+      }
+
+      _fifoSortAsc(reconstructed);
+      p.lotes_costo = reconstructed;
+    }
+  }
+
+  if (!Array.isArray(p.lotes_costo_cali)) {
+    const sc = Math.max(0, parseInt(p.stock_cali, 10) || 0);
+    p.lotes_costo_cali = sc > 0 ? [{
+      id: uid('LOTC'),
+      fecha: today(),
+      costo: Math.max(0, Number(p.costo) || 0),
+      cantidad_inicial: sc,
+      restante: sc,
+      nota: 'Stock existente en Cali',
+      referencia: 'CALI-BASE'
+    }] : [];
+  }
+
+  _reconcileLotesWithStock(p, 'principal');
+  _reconcileLotesWithStock(p, 'cali');
+}
+
+function initFifoLotesAll(dbObj = null) {
+  const target = dbObj || DB;
+  if (!target || !Array.isArray(target.productos)) return;
+  target.productos.forEach(p => initFifoLotesProducto(p, target.movimientos || []));
+}
+
+function ensureFifoLotesProducto(p, movimientosList = null) {
+  if (!p) return;
+  if (!Array.isArray(p.lotes_costo) || !Array.isArray(p.lotes_costo_cali)) {
+    initFifoLotesProducto(p, movimientosList);
+    return;
+  }
+  const sumP = p.lotes_costo.reduce((s, l) => s + Math.max(0, parseInt(l.restante, 10) || 0), 0);
+  if (sumP !== Math.max(0, parseInt(p.stock, 10) || 0)) {
+    _reconcileLotesWithStock(p, 'principal');
+  }
+  const sumC = p.lotes_costo_cali.reduce((s, l) => s + Math.max(0, parseInt(l.restante, 10) || 0), 0);
+  if (sumC !== Math.max(0, parseInt(p.stock_cali, 10) || 0)) {
+    _reconcileLotesWithStock(p, 'cali');
+  }
+}
+
+function getFifoActiveLotes(p, origen = 'principal') {
+  if (!p) return [];
+  ensureFifoLotesProducto(p);
+  const lotesField = origen === 'cali' ? 'lotes_costo_cali' : 'lotes_costo';
+  return (p[lotesField] || []).filter(l => (parseInt(l.restante, 10) || 0) > 0);
+}
+
+function getFifoNextCost(p, origen = 'principal') {
+  if (!p) return 0;
+  const activos = getFifoActiveLotes(p, origen);
+  return activos.length > 0 ? (Number(activos[0].costo) || 0) : (Number(p.costo) || 0);
+}
+
+function getFifoTotalValue(p, origen = 'principal') {
+  if (!p) return 0;
+  ensureFifoLotesProducto(p);
+  if (origen === 'all') {
+    return getFifoTotalValue(p, 'principal') + getFifoTotalValue(p, 'cali');
+  }
+  const lotesField = origen === 'cali' ? 'lotes_costo_cali' : 'lotes_costo';
+  return (p[lotesField] || []).reduce((sum, l) => sum + ((parseInt(l.restante, 10) || 0) * (Number(l.costo) || 0)), 0);
+}
+
+function previewFifoConsumo(p, qty, origen = 'principal', skipUnits = 0) {
+  const q = Math.max(0, parseInt(qty, 10) || 0);
+  if (!p || q <= 0) return { costoTotal: 0, costoUnitarioPromedio: Number(p?.costo) || 0, desglose: [] };
+  const activos = getFifoActiveLotes(p, origen);
+  let skip = Math.max(0, parseInt(skipUnits, 10) || 0);
+  let need = q;
+  let costoTotal = 0;
+  const desglose = [];
+  let lastCosto = Number(p.costo) || 0;
+
+  for (const l of activos) {
+    lastCosto = Number(l.costo) || 0;
+    let avail = parseInt(l.restante, 10) || 0;
+    if (skip > 0) {
+      const s = Math.min(avail, skip);
+      avail -= s;
+      skip -= s;
+    }
+    if (avail <= 0) continue;
+    const take = Math.min(avail, need);
+    costoTotal += take * lastCosto;
+    desglose.push({ lote_id: l.id, origin_lote_id: l.origin_lote_id || '', fecha: l.fecha, cantidad: take, costo: lastCosto, nota: l.nota || '' });
+    need -= take;
+    if (need <= 0) break;
+  }
+
+  if (need > 0) {
+    costoTotal += need * lastCosto;
+    desglose.push({ lote_id: 'FALLBACK', fecha: today(), cantidad: need, costo: lastCosto, nota: 'Sin respaldo de lote' });
+  }
+
+  const costoUnitarioPromedio = Math.round((costoTotal / q) * 100) / 100;
+  return { costoTotal, costoUnitarioPromedio, desglose };
+}
+
+function addFifoLoteProducto(p, { fecha, cantidad, costo, nota = '', referencia = '', origen = 'principal', id = '' } = {}) {
+  if (!p) return null;
+  ensureFifoLotesProducto(p);
+  const qty = Math.max(0, parseInt(cantidad, 10) || 0);
+  if (qty <= 0) return null;
+  const stockField = origen === 'cali' ? 'stock_cali' : 'stock';
+  const lotesField = origen === 'cali' ? 'lotes_costo_cali' : 'lotes_costo';
+  const costVal = (costo !== undefined && costo !== null && !isNaN(Number(costo)) && Number(costo) >= 0)
+    ? Math.round(Number(costo))
+    : Math.max(0, Number(p.costo) || 0);
+
+  const layer = {
+    id: id || uid(origen === 'cali' ? 'LOTC' : 'LOT'),
+    fecha: String(fecha || today()).slice(0, 10),
+    costo: costVal,
+    cantidad_inicial: qty,
+    restante: qty,
+    nota: nota || 'Entrada de inventario',
+    referencia: referencia || ''
+  };
+
+  p[lotesField].push(layer);
+  _fifoSortAsc(p[lotesField]);
+  p[stockField] = p[lotesField].reduce((s, l) => s + (parseInt(l.restante, 10) || 0), 0);
+  if (origen === 'principal') {
+    const firstActive = p[lotesField].find(l => l.restante > 0);
+    if (firstActive) p.costo = Math.round(firstActive.costo);
+  }
+  return layer;
+}
+
+function consumeFifoLotesProducto(p, qty, origen = 'principal') {
+  const q = Math.max(0, parseInt(qty, 10) || 0);
+  if (!p || q <= 0) return { costoTotal: 0, costoUnitarioPromedio: Number(p?.costo) || 0, desglose: [] };
+  ensureFifoLotesProducto(p);
+  const stockField = origen === 'cali' ? 'stock_cali' : 'stock';
+  const lotesField = origen === 'cali' ? 'lotes_costo_cali' : 'lotes_costo';
+
+  let need = q;
+  let costoTotal = 0;
+  const desglose = [];
+  let lastCosto = Number(p.costo) || 0;
+
+  for (const l of p[lotesField]) {
+    if (need <= 0) break;
+    const avail = parseInt(l.restante, 10) || 0;
+    if (avail <= 0) continue;
+    lastCosto = Number(l.costo) || 0;
+    const take = Math.min(avail, need);
+    l.restante = avail - take;
+    costoTotal += take * lastCosto;
+    desglose.push({ lote_id: l.id, origin_lote_id: l.origin_lote_id || '', fecha: l.fecha, cantidad: take, costo: lastCosto, nota: l.nota || '' });
+    need -= take;
+  }
+
+  if (need > 0) {
+    costoTotal += need * lastCosto;
+    desglose.push({ lote_id: 'FALLBACK', fecha: today(), cantidad: need, costo: lastCosto, nota: 'Stock insuficiente al descontar' });
+  }
+
+  p[stockField] = Math.max(0, p[lotesField].reduce((s, l) => s + (parseInt(l.restante, 10) || 0), 0));
+  if (origen === 'principal') {
+    const firstActive = p[lotesField].find(l => l.restante > 0);
+    p.costo = firstActive ? Math.round(firstActive.costo) : Math.round(lastCosto);
+  }
+
+  const activos = p[lotesField].filter(l => l.restante > 0);
+  const agotados = p[lotesField].filter(l => l.restante <= 0);
+  if (agotados.length > 10) {
+    p[lotesField] = [...agotados.slice(-10), ...activos];
+    _fifoSortAsc(p[lotesField]);
+  }
+
+  const costoUnitarioPromedio = Math.round((costoTotal / q) * 100) / 100;
+  return { costoTotal, costoUnitarioPromedio, desglose };
+}
+
+function restoreFifoLotesProducto(p, desglose, fallbackQty = 0, fallbackCosto = 0, origen = 'principal', fechaFallback = '', maxQty = null) {
+  if (!p) return;
+  ensureFifoLotesProducto(p);
+  const stockField = origen === 'cali' ? 'stock_cali' : 'stock';
+  const lotesField = origen === 'cali' ? 'lotes_costo_cali' : 'lotes_costo';
+
+  if (Array.isArray(desglose) && desglose.length > 0) {
+    let remainingBudget = (maxQty !== null && maxQty !== undefined) ? Math.max(0, parseInt(maxQty, 10) || 0) : Infinity;
+    for (const item of desglose) {
+      if (remainingBudget <= 0) break;
+      const itemQty = Math.max(0, parseInt(item.cantidad, 10) || 0);
+      const restoreQty = Math.min(itemQty, remainingBudget);
+      if (restoreQty <= 0) continue;
+      remainingBudget -= restoreQty;
+
+      const existing = item.lote_id && item.lote_id !== 'FALLBACK'
+        ? p[lotesField].find(l => l.id === item.lote_id)
+        : null;
+      if (existing) {
+        existing.restante = (parseInt(existing.restante, 10) || 0) + restoreQty;
+        existing.cantidad_inicial = Math.max(existing.cantidad_inicial || 0, existing.restante);
+      } else {
+        p[lotesField].push({
+          id: (item.lote_id && item.lote_id !== 'FALLBACK') ? item.lote_id : uid(origen === 'cali' ? 'LOTC' : 'LOT'),
+          fecha: String(item.fecha || fechaFallback || today()).slice(0, 10),
+          costo: Math.max(0, Math.round(Number(item.costo ?? fallbackCosto ?? p.costo) || 0)),
+          cantidad_inicial: restoreQty,
+          restante: restoreQty,
+          nota: item.nota || 'Reintegro PEPS',
+          referencia: 'RESTORE'
+        });
+      }
+    }
+    _fifoSortAsc(p[lotesField]);
+    p[stockField] = p[lotesField].reduce((s, l) => s + (parseInt(l.restante, 10) || 0), 0);
+    if (origen === 'principal') {
+      const firstActive = p[lotesField].find(l => l.restante > 0);
+      if (firstActive) p.costo = Math.round(firstActive.costo);
+    }
+    return;
+  }
+
+  const fbQty = Math.max(0, parseInt(maxQty ?? fallbackQty, 10) || 0);
+  if (fbQty > 0) {
+    addFifoLoteProducto(p, {
+      fecha: fechaFallback || today(),
+      cantidad: fbQty,
+      costo: Math.max(0, Math.round(Number(fallbackCosto || p.costo) || 0)),
+      nota: 'Reintegro de inventario',
+      referencia: 'RESTORE',
+      origen
+    });
+  }
+}
+
+function transferFifoLotesProducto(p, qty, fromOrigen = 'principal', toOrigen = 'cali') {
+  const res = consumeFifoLotesProducto(p, qty, fromOrigen);
+  const itemsToTransfer = res.desglose.map(item => ({
+    ...item,
+    lote_id: toOrigen === 'principal' ? (item.origin_lote_id || undefined) : undefined,
+    origin_lote_id: fromOrigen === 'principal' ? item.lote_id : item.origin_lote_id
+  }));
+  ensureFifoLotesProducto(p);
+  const stockField = toOrigen === 'cali' ? 'stock_cali' : 'stock';
+  const lotesField = toOrigen === 'cali' ? 'lotes_costo_cali' : 'lotes_costo';
+  for (const item of itemsToTransfer) {
+    const targetExisting = item.lote_id ? p[lotesField].find(l => l.id === item.lote_id) : null;
+    if (targetExisting) {
+      targetExisting.restante = (parseInt(targetExisting.restante, 10) || 0) + item.cantidad;
+    } else {
+      p[lotesField].push({
+        id: item.lote_id || uid(toOrigen === 'cali' ? 'LOTC' : 'LOT'),
+        fecha: item.fecha || today(),
+        costo: Math.max(0, Math.round(Number(item.costo ?? p.costo) || 0)),
+        cantidad_inicial: item.cantidad,
+        restante: item.cantidad,
+        nota: item.nota || (toOrigen === 'cali' ? 'Traslado desde Bodega Principal' : 'Retorno desde Cali'),
+        referencia: 'TRANSFER',
+        origin_lote_id: item.origin_lote_id || ''
+      });
+    }
+  }
+  _fifoSortAsc(p[lotesField]);
+  p[stockField] = p[lotesField].reduce((s, l) => s + (parseInt(l.restante, 10) || 0), 0);
+  if (toOrigen === 'principal') {
+    const firstActive = p[lotesField].find(l => l.restante > 0);
+    if (firstActive) p.costo = Math.round(firstActive.costo);
+  }
+  return res;
+}
+
+let _lfEditRows = [];
+function openModalLotesFifo(pid) {
+  const p = getProducto(pid);
+  if (!p) return;
+  ensureFifoLotesProducto(p);
+  document.getElementById('lf-prod-id').value = p.id;
+  document.getElementById('lf-modal-title').textContent = `📦 Lotes PEPS · ${p.nombre}`;
+  document.getElementById('lf-modal-sub').textContent = `ID: ${p.id} · Categoría: ${p.categoria || '—'} · PVP: ${fmt(p.precio)}`;
+
+  _lfEditRows = (p.lotes_costo || []).filter(l => l.restante > 0).map(l => ({
+    id: l.id,
+    fecha: l.fecha || today(),
+    restante: parseInt(l.restante, 10) || 0,
+    costo: Math.round(Number(l.costo) || 0),
+    nota: l.nota || '',
+    cantidad_inicial: l.cantidad_inicial || l.restante,
+    referencia: l.referencia || ''
+  }));
+  if (_lfEditRows.length === 0 && (p.stock || 0) > 0) {
+    _lfEditRows.push({ id: uid('LOT'), fecha: today(), restante: p.stock, costo: p.costo || 0, nota: 'Lote inicial', cantidad_inicial: p.stock, referencia: '' });
+  }
+
+  renderModalLotesFifoRows();
+
+  const caliZone = document.getElementById('lf-cali-zone');
+  const caliActivos = (p.lotes_costo_cali || []).filter(l => l.restante > 0);
+  if (caliZone) {
+    if (caliActivos.length > 0) {
+      caliZone.style.display = 'block';
+      caliZone.innerHTML = `<div style="font-size:11.5px;font-weight:700;color:#3a5a7a;margin-bottom:6px">📍 Capas activas en Stock Cali (${caliActivos.reduce((a,l)=>a+l.restante,0)} uds · Valor ${fmt(getFifoTotalValue(p,'cali'))})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${caliActivos.map(l => `<span class="badge badge-blue" style="font-size:11px">${l.fecha}: ${l.restante} uds × ${fmt(l.costo)}</span>`).join('')}</div>`;
+    } else {
+      caliZone.style.display = 'none';
+      caliZone.innerHTML = '';
+    }
+  }
+
+  const exZone = document.getElementById('lf-exhausted-zone');
+  const agotados = (p.lotes_costo || []).filter(l => l.restante <= 0).reverse();
+  if (exZone) {
+    if (agotados.length > 0) {
+      exZone.style.display = 'block';
+      exZone.innerHTML = `<details style="font-size:12px;color:var(--ink3);margin-bottom:6px">
+        <summary style="cursor:pointer;font-weight:600">Historial de lotes ya agotados (${agotados.length})</summary>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+          ${agotados.map(l => `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:var(--bg2);border-radius:6px"><span>${escapeHtml(l.fecha)} · ${escapeHtml(l.nota || 'Lote')} (Inicial: ${l.cantidad_inicial} u)</span><span class="text-mono">${fmt(l.costo)}</span></div>`).join('')}
+        </div>
+      </details>`;
+    } else {
+      exZone.style.display = 'none';
+      exZone.innerHTML = '';
+    }
+  }
+
+  openModal('modal-lotes-fifo');
+}
+
+function renderModalLotesFifoRows() {
+  const tbody = document.getElementById('lf-tbody');
+  const sumEl = document.getElementById('lf-summary');
+  if (!tbody) return;
+
+  const totalUds = _lfEditRows.reduce((a, l) => a + (parseInt(l.restante, 10) || 0), 0);
+  const totalVal = _lfEditRows.reduce((a, l) => a + ((parseInt(l.restante, 10) || 0) * (Number(l.costo) || 0)), 0);
+  const sortedPreview = [..._lfEditRows].filter(l => (parseInt(l.restante, 10) || 0) > 0)
+    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+  const nextCost = sortedPreview.length ? (Number(sortedPreview[0].costo) || 0) : 0;
+
+  if (sumEl) {
+    sumEl.innerHTML = `
+      <div style="flex:1;min-width:140px;background:var(--bg2);padding:8px 12px;border-radius:var(--r);border:1px solid var(--border)">
+        <div style="font-size:10.5px;color:var(--ink3);text-transform:uppercase">Stock Principal</div>
+        <div style="font-size:16px;font-weight:700">${totalUds} uds</div>
+      </div>
+      <div style="flex:1;min-width:160px;background:var(--bg2);padding:8px 12px;border-radius:var(--r);border:1px solid var(--border)">
+        <div style="font-size:10.5px;color:var(--ink3);text-transform:uppercase">Valor Exacto PEPS</div>
+        <div style="font-size:16px;font-weight:700;color:var(--sage)">${fmt(totalVal)}</div>
+      </div>
+      <div style="flex:1;min-width:150px;background:var(--bg2);padding:8px 12px;border-radius:var(--r);border:1px solid var(--border)">
+        <div style="font-size:10.5px;color:var(--ink3);text-transform:uppercase">Costo Próx. Salida</div>
+        <div style="font-size:16px;font-weight:700;color:var(--gold)">${fmt(nextCost)}</div>
+      </div>`;
+  }
+
+  if (_lfEditRows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink3);padding:16px">Sin lotes activos (stock 0). Usa "+ Agregar capa / lote" si deseas crear uno.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = _lfEditRows.map((l, idx) => {
+    const sub = (parseInt(l.restante, 10) || 0) * (Number(l.costo) || 0);
+    return `<tr>
+      <td><input type="date" value="${escapeHtml(l.fecha)}" style="padding:5px 7px;font-size:12px" onchange="_lfEditRows[${idx}].fecha=this.value;renderModalLotesFifoRows()"></td>
+      <td><input type="number" min="0" value="${l.restante}" style="padding:5px 7px;font-size:12px;width:82px;font-weight:600" oninput="_lfEditRows[${idx}].restante=Math.max(0,parseInt(this.value)||0);renderModalLotesFifoRows()"></td>
+      <td><input type="number" min="0" step="1" value="${l.costo}" style="padding:5px 7px;font-size:12px;width:105px;font-weight:600" oninput="_lfEditRows[${idx}].costo=Math.max(0,Number(this.value)||0);renderModalLotesFifoRows()"></td>
+      <td><input type="text" value="${escapeHtml(l.nota)}" placeholder="Ej: Compra proveedor..." style="padding:5px 7px;font-size:12px;width:100%" oninput="_lfEditRows[${idx}].nota=this.value"></td>
+      <td style="text-align:right;white-space:nowrap;font-weight:600" class="text-mono">${fmt(sub)}</td>
+      <td><button type="button" class="btn btn-xs btn-danger" onclick="removeRowModalLotesFifo(${idx})" title="Eliminar lote">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function addRowModalLotesFifo() {
+  const p = getProducto(document.getElementById('lf-prod-id')?.value);
+  _lfEditRows.push({
+    id: uid('LOT'),
+    fecha: today(),
+    restante: 1,
+    costo: p ? (Number(p.costo) || 0) : 0,
+    nota: 'Lote agregado manualmente',
+    cantidad_inicial: 1,
+    referencia: 'MANUAL'
+  });
+  renderModalLotesFifoRows();
+}
+
+function removeRowModalLotesFifo(idx) {
+  _lfEditRows.splice(idx, 1);
+  renderModalLotesFifoRows();
+}
+
+function saveModalLotesFifo() {
+  const pid = document.getElementById('lf-prod-id')?.value;
+  const p = getProducto(pid);
+  if (!p) return;
+
+  const agotadosPrev = (p.lotes_costo || []).filter(l => (parseInt(l.restante, 10) || 0) <= 0);
+  const nuevosActivos = _lfEditRows
+    .map(l => ({
+      id: l.id || uid('LOT'),
+      fecha: String(l.fecha || today()).slice(0, 10),
+      restante: Math.max(0, parseInt(l.restante, 10) || 0),
+      cantidad_inicial: Math.max(parseInt(l.cantidad_inicial, 10) || 0, Math.max(0, parseInt(l.restante, 10) || 0)),
+      costo: Math.max(0, Math.round(Number(l.costo) || 0)),
+      nota: (l.nota || '').trim() || 'Lote PEPS',
+      referencia: l.referencia || ''
+    }))
+    .filter(l => l.restante > 0);
+
+  p.lotes_costo = [...agotadosPrev, ...nuevosActivos];
+  _fifoSortAsc(p.lotes_costo);
+  p.stock = nuevosActivos.reduce((s, l) => s + l.restante, 0);
+  const sortedActivos = p.lotes_costo.filter(l => l.restante > 0);
+  if (sortedActivos.length > 0) {
+    p.costo = Math.round(sortedActivos[0].costo);
+  }
+
+  saveDB();
+  try { syncProductoToFirestore(p); } catch(e){}
+  closeModal('modal-lotes-fifo');
+  const ap = document.querySelector('.nav-item.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || 'inventario';
+  renderPage(ap);
+  if (typeof showAdminToast === 'function') {
+    showAdminToast(`✓ Lotes PEPS de ${p.nombre} actualizados (${p.stock} uds · Valor ${fmt(getFifoTotalValue(p, 'principal'))})`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 // INVENTARIO
 // ══════════════════════════════════════════════════════════
 function renderInventario() {
@@ -5692,7 +6314,7 @@ function renderInventario() {
   // Resumen de Stock en Cali
   const prodsEnCali = DB.productos.filter(p => (p.stock_cali || 0) > 0);
   const totalUdsCali = prodsEnCali.reduce((a, p) => a + (p.stock_cali || 0), 0);
-  const valorCostoCali = prodsEnCali.reduce((a, p) => a + (p.costo || 0) * (p.stock_cali || 0), 0);
+  const valorCostoCali = prodsEnCali.reduce((a, p) => a + getFifoTotalValue(p, 'cali'), 0);
   const valorVentaCali = prodsEnCali.reduce((a, p) => a + (p.precio || 0) * (p.stock_cali || 0), 0);
   const caliSummaryEl = document.getElementById('inv-cali-summary');
   if (caliSummaryEl) {
@@ -5727,18 +6349,35 @@ function renderInventario() {
 
   let prods=DB.productos.filter(p=>p.activo);
   if(q)prods=prods.filter(p=>p.nombre.toLowerCase().includes(q)||p.categoria.toLowerCase().includes(q));
-  const valorTotal=prods.reduce((a,p)=>a+p.costo*p.stock,0);
+  const valorTotal=prods.reduce((a,p)=>a+getFifoTotalValue(p,'principal'),0);
   document.getElementById('inv-valor-total').textContent=`Valor bodega principal: ${fmt(valorTotal)}${valorCostoCali>0 ? ' · En Cali: ' + fmt(valorCostoCali) : ''}`;
-  document.getElementById('inventario-table').innerHTML=`<table><thead><tr><th>ID</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>📍 Cali</th><th>Mín.</th><th>Estado</th><th>Costo</th><th>Valor Stock</th></tr></thead><tbody>
-    ${prods.map(p=>{const e=p.stock===0?['badge-red','Sin Stock']:p.stock<=p.stock_min?['badge-gold','Bajo']:['badge-green','OK'];
-    const sc = p.stock_cali || 0;
-    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}${p.tiene_descuento?'<span class="badge badge-purple" style="margin-left:6px;font-size:9px">DESC</span>':''}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td class="fw-600 ${p.stock<=p.stock_min?'color-red':''}">${p.stock}</td><td>${sc>0?`<span class="badge badge-blue" title="Unidades en Cali">📍 ${sc}</span>`:'<span class="text-muted">—</span>'}</td><td class="text-muted">${p.stock_min}</td><td><span class="badge ${e[0]}">${e[1]}</span></td><td>${fmt(p.costo)}</td><td>${fmt(p.costo*p.stock)}</td></tr>`;}).join('')}
+  document.getElementById('inventario-table').innerHTML=`<table><thead><tr><th>ID</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>📍 Cali</th><th>Mín.</th><th>Estado</th><th>Costo PEPS</th><th>Valor Stock</th></tr></thead><tbody>
+    ${prods.map(p=>{
+      const e=p.stock===0?['badge-red','Sin Stock']:p.stock<=p.stock_min?['badge-gold','Bajo']:['badge-green','OK'];
+      const sc = p.stock_cali || 0;
+      const activos = getFifoActiveLotes(p, 'principal');
+      const nextCosto = getFifoNextCost(p, 'principal');
+      const valStock = getFifoTotalValue(p, 'principal');
+      const hasMultiCost = activos.length > 1 && activos.some(l => Math.round(l.costo) !== Math.round(activos[0].costo));
+      const lotesResumen = activos.map(l => `${l.restante}×${fmt(l.costo)}`).join(' → ');
+      const costoCell = hasMultiCost
+        ? `<div><span class="fw-600">${fmt(nextCosto)}</span> <button type="button" class="badge badge-gold" style="border:none;cursor:pointer;font-size:10px;margin-left:4px" onclick="openModalLotesFifo('${p.id}')" title="Orden PEPS: ${escapeHtml(lotesResumen)}">📦 ${activos.length} lotes</button></div><div style="font-size:10.5px;color:var(--ink3);margin-top:2px">${escapeHtml(lotesResumen)}</div>`
+        : `<div style="display:flex;align-items:center;gap:6px"><span>${fmt(nextCosto)}</span><button type="button" class="btn btn-xs btn-secondary" style="padding:1px 6px;font-size:10px" onclick="openModalLotesFifo('${p.id}')" title="Ver o editar lotes PEPS">📦</button></div>`;
+      return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}${p.tiene_descuento?'<span class="badge badge-purple" style="margin-left:6px;font-size:9px">DESC</span>':''}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td class="fw-600 ${p.stock<=p.stock_min?'color-red':''}">${p.stock}</td><td>${sc>0?`<span class="badge badge-blue" title="Unidades en Cali">📍 ${sc}</span>`:'<span class="text-muted">—</span>'}</td><td class="text-muted">${p.stock_min}</td><td><span class="badge ${e[0]}">${e[1]}</span></td><td>${costoCell}</td><td class="fw-600">${fmt(valStock)}</td></tr>`;
+    }).join('')}
   </tbody></table>`;
   const movs=[...DB.movimientos].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,40);
   const tipoColor={entrada:'badge-green',venta:'badge-blue',venta_cali:'badge-blue',traslado_cali:'badge-purple',retorno_cali:'badge-green',merma:'badge-red',muestra:'badge-terra',obsequio:'badge-terra',influencer:'badge-purple',ajuste:'badge-gold'};
   const tipoLabel={traslado_cali:'📍 envío a Cali',retorno_cali:'↩️ retorno Cali',venta_cali:'📍 venta Cali'};
-  document.getElementById('movimientos-table').innerHTML=movs.length===0?'<div class="empty"><p>Sin movimientos</p></div>':`<table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Nota</th></tr></thead><tbody>
-    ${movs.map(m=>{const p=getProducto(m.id_producto);return`<tr><td>${m.fecha}</td><td>${p?.nombre||m.id_producto}</td><td><span class="badge ${tipoColor[m.tipo]||'badge-gray'}">${tipoLabel[m.tipo]||m.tipo}</span></td><td class="${m.cantidad>0?'color-sage':'color-red'}">${m.cantidad>0?'+':''}${m.cantidad}</td><td class="text-muted">${m.nota||'—'}</td></tr>`}).join('')}
+  document.getElementById('movimientos-table').innerHTML=movs.length===0?'<div class="empty"><p>Sin movimientos</p></div>':`<table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Costo Unit.</th><th>Nota</th></tr></thead><tbody>
+    ${movs.map(m=>{
+      const p=getProducto(m.id_producto);
+      const desg = Array.isArray(m.lotes_consumidos) && m.lotes_consumidos.length > 1
+        ? `<div style="font-size:10px;color:var(--ink3)">${m.lotes_consumidos.map(l=>`${l.cantidad}×${fmt(l.costo)}`).join(' + ')}</div>`
+        : '';
+      const costoCell = m.costo_unitario > 0 ? `${fmt(m.costo_unitario)}${desg}` : '—';
+      return`<tr><td>${m.fecha}</td><td>${p?.nombre||m.id_producto}</td><td><span class="badge ${tipoColor[m.tipo]||'badge-gray'}">${tipoLabel[m.tipo]||m.tipo}</span></td><td class="${m.cantidad>0?'color-sage':'color-red'}">${m.cantidad>0?'+':''}${m.cantidad}</td><td style="white-space:nowrap">${costoCell}</td><td class="text-muted">${m.nota||'—'}</td></tr>`;
+    }).join('')}
   </tbody></table>`;
   renderLotesProduccion();
 }
@@ -5857,7 +6496,14 @@ function renderProductos() {
   document.getElementById('productos-table').innerHTML=prods.length===0?'<div class="empty"><div class="empty-icon">🧴</div><h3>Sin productos</h3></div>':`
     <table><thead><tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Costo Puro</th><th>Precio (PVP)</th><th>${verConTarjeta ? 'Margen Neto 💳' : 'Margen'}</th><th>Stock</th><th>Tienda Web</th><th>Promo</th><th></th></tr></thead><tbody>
     ${prodsPage.map(p=>{
-    const desg = calcDesglosePasarela(p.precio, p.costo);
+    const activosFifo = getFifoActiveLotes(p, 'principal');
+    const costoFifo = getFifoNextCost(p, 'principal');
+    const hasMultiFifo = activosFifo.length > 1 && activosFifo.some(l => Math.round(l.costo) !== Math.round(activosFifo[0].costo));
+    const fifoTitle = activosFifo.map(l => `${l.restante}×${fmt(l.costo)}`).join(' → ');
+    const costoCellHtml = hasMultiFifo
+      ? `<div><span>${fmt(costoFifo)}</span> <button type="button" class="badge badge-gold" style="border:none;cursor:pointer;font-size:9.5px;margin-left:3px" onclick="openModalLotesFifo('${p.id}')" title="PEPS: ${escapeHtml(fifoTitle)}">📦 ${activosFifo.length}</button></div>`
+      : fmt(costoFifo);
+    const desg = calcDesglosePasarela(p.precio, costoFifo);
     const m = verConTarjeta ? desg.margenNeto : desg.margenBruto;
     const margenCellHtml = verConTarjeta
       ? `<div title="PVP: ${fmt(p.precio)} | Comisión tarjeta (3,8681%): -${fmtDec(desg.comision)} (Tarifa 1,99%: ${fmtDec(desg.tarifa)} + IVA 19%: ${fmtDec(desg.iva)} + ReteFuente 1,50%: ${fmtDec(desg.rete)}) | Ingreso Neto: ${fmtDec(desg.ingresoNeto)} | Utilidad Neta: ${fmtDec(desg.utilidadNeta)}">
@@ -5876,7 +6522,7 @@ function renderProductos() {
     const promoCell = enPromo
       ? `<span class="badge" style="font-size:9.5px;background:var(--gold-light);color:var(--gold);line-height:1.3;display:inline-block">🏷️ Ahora ${fmt(pOferta)}<br><span style="font-size:8.5px">hasta ${p.promo_hasta}</span></span>`
       : (pOferta > 0 && p.promo_desde ? `<span class="badge badge-gray" style="font-size:9px" title="Oferta ${fmt(pOferta)} del ${p.promo_desde} al ${p.promo_hasta}">⏳ ${p.promo_desde}</span>` : '');
-    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td>${fmt(p.costo)}</td><td class="fw-600">${precioCell}</td><td class="${m>=50?'color-sage':m>=35?'color-gold':'color-red'}">${margenCellHtml}</td><td class="${p.stock<=p.stock_min?'color-red':'color-sage'} fw-600">${p.stock}</td><td>${webBadge}</td><td>${promoCell}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editProducto('${p.id}')" title="Editar y gestionar publicación web">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteProducto('${p.id}')">🗑</button></div></td></tr>`;}).join('')}
+    return`<tr><td class="text-mono text-sm">${p.id}</td><td class="fw-600">${p.nombre}</td><td><span class="badge badge-gray">${p.categoria}</span></td><td>${costoCellHtml}</td><td class="fw-600">${precioCell}</td><td class="${m>=50?'color-sage':m>=35?'color-gold':'color-red'}">${margenCellHtml}</td><td class="${p.stock<=p.stock_min?'color-red':'color-sage'} fw-600">${p.stock}</td><td>${webBadge}</td><td>${promoCell}</td><td><div class="inline-actions"><button class="btn btn-xs btn-secondary" onclick="editProducto('${p.id}')" title="Editar y gestionar publicación web">✏️</button><button class="btn btn-xs btn-danger" onclick="deleteProducto('${p.id}')">🗑</button></div></td></tr>`;}).join('')}
     </tbody></table>
     ${paginationControlsHTML(_productosPage, totalPagesP, 'goToProductosPage')}`;
 }
@@ -6622,7 +7268,7 @@ function renderReportes() {
     <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);color:var(--ink3)"><span>— Gastos Operativos</span><span>${fmt(gastos)}</span></div>
     <div style="display:flex;justify-content:space-between;padding:12px;background:var(--bg2);border-radius:var(--r);margin-top:8px"><span class="fw-600">Utilidad Neta</span><span class="fw-600 ${uN>=0?'color-sage':'color-red'}">${fmt(uN)} (${ing>0?(uN/ing*100).toFixed(1):'0'}%)</span></div>
   </div>`;
-  const totalStock=DB.productos.reduce((a,p)=>a+p.costo*p.stock,0);
+  const totalStock=DB.productos.reduce((a,p)=>a+getFifoTotalValue(p,'principal'),0);
   document.getElementById('inv-report-body').innerHTML=`<div style="font-size:13px">
     <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>Productos activos</span><span class="fw-600">${DB.productos.filter(p=>p.activo).length}</span></div>
     <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>Valor en stock</span><span class="fw-600 color-sage">${fmt(totalStock)}</span></div>
@@ -6634,11 +7280,11 @@ function renderReportes() {
   renderClientesInactivos();
   renderComisionesHistorico();
   const muestras=(DB.muestras||[]).filter(m=>m.fecha?.startsWith(ym));
-  const costMuestras=muestras.reduce((a,m)=>{const p=getProducto(m.id_producto);return a+(p?.costo||0)*m.cantidad},0);
+  const costMuestras=muestras.reduce((a,m)=>{if(m.costo_total!=null)return a+m.costo_total;const p=getProducto(m.id_producto);return a+(m.costo_unitario??p?.costo??0)*m.cantidad;},0);
   document.getElementById('muestras-report-body').innerHTML=muestras.length===0?'<div class="empty"><p>Sin muestras este mes</p></div>':`
     <div style="margin-bottom:12px;font-size:13px;color:var(--ink2)">Costo total de muestras: <strong class="color-gold">${fmt(costMuestras)}</strong></div>
     <table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cant.</th><th>Destinatario</th><th>Costo</th></tr></thead><tbody>
-    ${muestras.map(m=>{const p=getProducto(m.id_producto);return`<tr><td>${m.fecha}</td><td>${p?.nombre||m.id_producto}</td><td><span class="badge badge-terra">${m.tipo}</span></td><td>${m.cantidad}</td><td>${m.nota||'—'}</td><td class="color-gold">${fmt((p?.costo||0)*m.cantidad)}</td></tr>`}).join('')}
+    ${muestras.map(m=>{const p=getProducto(m.id_producto);const cRow=m.costo_total!=null?m.costo_total:(m.costo_unitario??p?.costo??0)*m.cantidad;return`<tr><td>${m.fecha}</td><td>${p?.nombre||m.id_producto}</td><td><span class="badge badge-terra">${m.tipo}</span></td><td>${m.cantidad}</td><td>${m.nota||'—'}</td><td class="color-gold">${fmt(cRow)}</td></tr>`;}).join('')}
     </tbody></table>`;
   document.getElementById('ai-report-output').innerHTML='';
   renderSettingsFaceId();
@@ -6942,15 +7588,19 @@ document.addEventListener('click', e=>{
 function calcTotalVenta(){
   let subtotal=0,costoTotal=0,cashbackBase=0;
   const fechaVenta=document.getElementById('v-fecha')?.value||today();
+  const origenPreview=document.querySelector('input[name="v-origen-stock"]:checked')?.value || 'principal';
+  const offsetMap = {};
   document.querySelectorAll('#venta-items .form-row').forEach(row=>{
     const prod=row.querySelector('.vi-prod');const qty=parseInt(row.querySelector('.vi-qty')?.value)||0;
     if(prod?.value){
       const p=getProducto(prod.value);
       const frozen=row.querySelector('.vi-precio-frozen')?.value;
       const precio=(frozen!==''&&frozen!=null)?parseFloat(frozen):precioEnFecha(p, fechaVenta);
-      const costo=p?.costo||0;
+      const skip = offsetMap[prod.value] || 0;
+      const fifoPrev = p ? previewFifoConsumo(p, qty, origenPreview, skip) : { costoTotal: 0 };
+      offsetMap[prod.value] = skip + qty;
       const hasDesc=p?.tiene_descuento===true;
-      subtotal+=precio*qty;costoTotal+=costo*qty;
+      subtotal+=precio*qty;costoTotal+=fifoPrev.costoTotal;
       if(!hasDesc)cashbackBase+=precio*qty;
     }
   });
@@ -7037,24 +7687,43 @@ function calcTotalVenta(){
 }
 
 function saveVenta(){
-  const items=[];let totalBruto=0,costoProd=0,valid=true;
+  const rawRows=[];let valid=true;
   const fechaVenta=document.getElementById('v-fecha').value||today();
   const origenStock=document.querySelector('input[name="v-origen-stock"]:checked')?.value || 'principal';
   const esCali = origenStock === 'cali';
+  const reqByProd = {};
   document.querySelectorAll('#venta-items .form-row').forEach(row=>{
+    if(!valid)return;
     const prod=row.querySelector('.vi-prod');const qty=parseInt(row.querySelector('.vi-qty')?.value)||0;
     if(!prod?.value||qty<=0){valid=false;return;}
     const p=getProducto(prod.value);if(!p)return;
+    reqByProd[p.id] = (reqByProd[p.id] || 0) + qty;
     const disp = esCali ? (p.stock_cali || 0) : p.stock;
-    if(disp<qty){
+    if(disp < reqByProd[p.id]){
       alert(`Stock insuficiente en ${esCali ? '📍 Stock Cali' : 'Bodega Principal'}: ${p.nombre} (${disp} disponibles)`);
       valid=false;return;
     }
-    const precio=precioEnFecha(p, fechaVenta);
-    totalBruto+=precio*qty;costoProd+=p.costo*qty;
-    items.push({id:uid('DET'),id_venta:'',id_producto:p.id,cantidad:qty,precio_unitario:precio,costo_unitario:p.costo,subtotal:precio*qty});
+    rawRows.push({ p, qty, precio: precioEnFecha(p, fechaVenta) });
   });
-  if(!valid||items.length===0){if(valid)alert('Agrega al menos un producto');return;}
+  if(!valid||rawRows.length===0){if(valid)alert('Agrega al menos un producto');return;}
+
+  const items=[];let totalBruto=0,costoProd=0;
+  rawRows.forEach(({ p, qty, precio }) => {
+    const fifoRes = consumeFifoLotesProducto(p, qty, origenStock);
+    totalBruto += precio * qty;
+    costoProd += fifoRes.costoTotal;
+    items.push({
+      id:uid('DET'),
+      id_venta:'',
+      id_producto:p.id,
+      cantidad:qty,
+      precio_unitario:precio,
+      costo_unitario:fifoRes.costoUnitarioPromedio,
+      lotes_consumidos:fifoRes.desglose,
+      subtotal:precio*qty
+    });
+  });
+
   calcTotalVenta();
   const envio=parseFloat(document.getElementById('v-envio').value)||0;
   const _tr=calcTransporteVenta(envio, parseFloat(document.getElementById('v-envio-cobrado').value)||0);
@@ -7064,7 +7733,7 @@ function saveVenta(){
   const cid=document.getElementById('v-cliente').value;
   const vid=uid('VTA');
   items.forEach(i=>i.id_venta=vid);
-  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,origen_stock:origenStock,total_bruto:totalBruto,descuento:desc,costo_envio:envioCobrado,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:_por,total_pagado:totalBruto+envioCobrado-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',registrar_gasto_pasarela:_registrarGastoPasarelaVenta!==false,estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:costoProd,cashback_generado:0};
+  const venta={id:vid,fecha:document.getElementById('v-fecha').value,id_cliente:cid,canal_venta:document.getElementById('v-canal').value,origen_stock:origenStock,total_bruto:totalBruto,descuento:desc,costo_envio:envioCobrado,subtotal_productos:totalBruto-desc,costo_transporte:envio,transporte_pagado_por:_por,total_pagado:totalBruto+envioCobrado-desc,metodo_pago:Array.from(document.querySelectorAll('#v-pago-checks input:checked')).map(x=>x.value).join(' + ')||'No especificado',registrar_gasto_pasarela:_registrarGastoPasarelaVenta!==false,estado_pago:document.getElementById('v-estado-pago').value,estado_envio:document.getElementById('v-estado-envio').value||'preparando',transportadora:document.getElementById('v-transportadora').value||'',numero_guia:document.getElementById('v-guia').value.trim()||'',costo_productos:Math.round(costoProd),cashback_generado:0};
   const cb=calcCashback(cid, desc, items);
   venta.cashback_generado=cb;
   // Apply cashback discount if used
@@ -7074,8 +7743,6 @@ function saveVenta(){
   items.forEach(d=>{
     const p=getProducto(d.id_producto);
     if(p){
-      if(esCali) p.stock_cali = Math.max(0, (p.stock_cali || 0) - d.cantidad);
-      else p.stock -= d.cantidad;
       DB.movimientos.push({
         id:uid('MOV'),
         fecha:venta.fecha,
@@ -7083,6 +7750,7 @@ function saveVenta(){
         tipo: esCali ? 'venta_cali' : 'venta',
         cantidad:-d.cantidad,
         costo_unitario:d.costo_unitario,
+        lotes_consumidos:d.lotes_consumidos,
         referencia:vid,
         nota: esCali ? `Venta ${vid} (📍 Stock Cali)` : `Venta ${vid}`
       });
@@ -7163,14 +7831,16 @@ async function guardarDevolucion(){
 
   const monto = items.reduce((a,i)=>a+i.cantidad*i.precio_unitario,0);
 
-  // Restore stock
+  // Restore stock (PEPS)
   const devCali = v.origen_stock === 'cali';
+  const detsVenta = getVentaDetalle(ventaId);
   items.forEach(i=>{
     const p=getProducto(i.id_producto);
     if(p){
-      if (devCali) p.stock_cali = (p.stock_cali || 0) + i.cantidad;
-      else p.stock += i.cantidad;
-      DB.movimientos.push({id:uid('MOV'),fecha:today(),id_producto:p.id,tipo:'ajuste',cantidad:i.cantidad,costo_unitario:p.costo,referencia:ventaId,nota:'Devolución venta '+ventaId+(devCali?' (📍 Stock Cali)':'')});
+      const detOrig = detsVenta.find(d => d.id_producto === p.id);
+      const cUnit = detOrig?.costo_unitario ?? p.costo;
+      restoreFifoLotesProducto(p, detOrig?.lotes_consumidos, i.cantidad, cUnit, devCali ? 'cali' : 'principal', v.fecha, i.cantidad);
+      DB.movimientos.push({id:uid('MOV'),fecha:today(),id_producto:p.id,tipo:'ajuste',cantidad:i.cantidad,costo_unitario:cUnit,referencia:ventaId,nota:'Devolución venta '+ventaId+(devCali?' (📍 Stock Cali)':'')});
       syncProductoToFirestore(p).catch(()=>{});
     }
   });
@@ -7982,12 +8652,45 @@ async function saveProducto(publishToWeb = false){
 
   let prodRef;
   if(existingProd){
+    const prevStock = parseInt(existingProd.stock, 10) || 0;
+    const prevCosto = Math.round(Number(existingProd.costo) || 0);
     Object.assign(existingProd, data);
     prodRef = existingProd;
+    ensureFifoLotesProducto(prodRef);
+    const activosNow = (prodRef.lotes_costo || []).filter(l => l.restante > 0);
+    if (Math.round(costo) !== prevCosto && activosNow.length > 0) {
+      activosNow[0].costo = Math.round(costo);
+    }
+    if (data.stock > prevStock) {
+      const diff = data.stock - prevStock;
+      prodRef.stock = prevStock;
+      addFifoLoteProducto(prodRef, { fecha: today(), cantidad: diff, costo: Math.round(costo), nota: 'Ajuste manual en ficha de producto', origen: 'principal' });
+    } else if (data.stock < prevStock) {
+      const diff = prevStock - data.stock;
+      prodRef.stock = prevStock;
+      consumeFifoLotesProducto(prodRef, diff, 'principal');
+    } else {
+      _reconcileLotesWithStock(prodRef, 'principal');
+    }
   } else {
     prodRef = {id: targetId, ...data};
+    if (prodRef.stock > 0) {
+      prodRef.lotes_costo = [{
+        id: uid('LOT'),
+        fecha: today(),
+        costo: Math.round(costo),
+        cantidad_inicial: prodRef.stock,
+        restante: prodRef.stock,
+        nota: 'Stock inicial de producto',
+        referencia: 'INIT'
+      }];
+    } else {
+      prodRef.lotes_costo = [];
+    }
+    prodRef.lotes_costo_cali = [];
     DB.productos.push(prodRef);
   }
+  syncProductoToFirestore(prodRef).catch(()=>{});
 
   if(publishToWeb){
     const btnWeb = document.getElementById('btn-save-prod-web');
@@ -8244,17 +8947,61 @@ function saveCliente(){
   }
 }
 
+function onEntradaProductoChange(){
+  const pid = document.getElementById('e-producto')?.value;
+  const p = getProducto(pid);
+  const infoEl = document.getElementById('e-fifo-info');
+  const costoEl = document.getElementById('e-costo');
+  if (!p) { if (infoEl) infoEl.style.display = 'none'; return; }
+  const activos = getFifoActiveLotes(p, 'principal');
+  if (costoEl && !costoEl.value) {
+    costoEl.placeholder = `Actual: ${Math.round(getFifoNextCost(p, 'principal'))}`;
+  }
+  if (infoEl) {
+    infoEl.style.display = 'block';
+    if (activos.length > 0) {
+      infoEl.innerHTML = `<strong>Stock actual:</strong> ${p.stock} uds · <strong>Lotes PEPS activos:</strong> ` +
+        activos.map(l => `<span class="badge badge-gray" style="font-size:11px;margin:2px">${l.restante} u × ${fmt(l.costo)} (${l.fecha})</span>`).join(' ');
+    } else {
+      infoEl.innerHTML = `<strong>Stock actual:</strong> 0 uds · <strong>Costo base anterior:</strong> ${fmt(p.costo || 0)}`;
+    }
+  }
+}
+
 function openModalEntrada(){
   document.getElementById('e-fecha').value=today();
-  document.getElementById('e-producto').innerHTML=DB.productos.filter(p=>p.activo).map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  document.getElementById('e-producto').innerHTML=DB.productos.filter(p=>p.activo).map(p=>`<option value="${p.id}">${p.nombre} (Stock: ${p.stock})</option>`).join('');
   ['e-cantidad','e-costo','e-nota'].forEach(id=>document.getElementById(id).value='');
+  onEntradaProductoChange();
   openModal('modal-entrada');
 }
 function saveEntrada(){
   const pid=document.getElementById('e-producto').value;const qty=parseInt(document.getElementById('e-cantidad').value)||0;
   if(!pid||qty<=0){alert('Selecciona producto y cantidad');return;}
   const p=getProducto(pid);
-  if(p){p.stock+=qty;DB.movimientos.push({id:uid('MOV'),fecha:document.getElementById('e-fecha').value,id_producto:pid,tipo:'entrada',cantidad:qty,costo_unitario:parseFloat(document.getElementById('e-costo').value)||p.costo,nota:document.getElementById('e-nota').value});saveDB();closeModal('modal-entrada');renderInventario();}
+  if(p){
+    const fechaEnt = document.getElementById('e-fecha').value || today();
+    const rawCosto = parseFloat(document.getElementById('e-costo').value);
+    const costoLote = (!isNaN(rawCosto) && rawCosto > 0) ? Math.round(rawCosto) : (Number(p.costo) || 0);
+    const notaEnt = (document.getElementById('e-nota').value || '').trim();
+    const movId = uid('MOV');
+    addFifoLoteProducto(p, {
+      fecha: fechaEnt,
+      cantidad: qty,
+      costo: costoLote,
+      nota: notaEnt || 'Entrada de inventario',
+      referencia: movId,
+      origen: 'principal'
+    });
+    const mov = {id:movId,fecha:fechaEnt,id_producto:pid,tipo:'entrada',cantidad:qty,costo_unitario:costoLote,nota:notaEnt};
+    DB.movimientos.push(mov);
+    syncProductoToFirestore(p).catch(()=>{});
+    syncMovimientoToFirestore(mov).catch(()=>{});
+    saveDB();closeModal('modal-entrada');renderInventario();
+    if (typeof showAdminToast === 'function') {
+      showAdminToast(`✓ Lote agregado: +${qty} uds de ${p.nombre} a ${fmt(costoLote)} c/u`);
+    }
+  }
 }
 
 function openModalAjuste(){
@@ -8266,7 +9013,14 @@ function saveAjuste(){
   const pid=document.getElementById('aj-producto').value;const qty=parseInt(document.getElementById('aj-cantidad').value)||0;const tipo=document.getElementById('aj-tipo').value;
   if(!pid||qty<=0){alert('Selecciona producto y cantidad');return;}
   const p=getProducto(pid);
-  if(p){p.stock=Math.max(0,p.stock-qty);DB.movimientos.push({id:uid('MOV'),fecha:today(),id_producto:pid,tipo,cantidad:-qty,nota:document.getElementById('aj-nota').value});saveDB();closeModal('modal-ajuste');renderInventario();}
+  if(p){
+    const fifoRes = consumeFifoLotesProducto(p, qty, 'principal');
+    const mov = {id:uid('MOV'),fecha:today(),id_producto:pid,tipo,cantidad:-qty,costo_unitario:fifoRes.costoUnitarioPromedio,lotes_consumidos:fifoRes.desglose,nota:document.getElementById('aj-nota').value};
+    DB.movimientos.push(mov);
+    syncProductoToFirestore(p).catch(()=>{});
+    syncMovimientoToFirestore(mov).catch(()=>{});
+    saveDB();closeModal('modal-ajuste');renderInventario();
+  }
 }
 
 // ── Gestión de Stock Satélite en Cali ──────────────────────
@@ -8383,21 +9137,19 @@ function saveStockCali() {
     const p = getProducto(pid);
     if (!p) continue;
     if (esEnviar) {
-      p.stock -= qty;
-      p.stock_cali = (p.stock_cali || 0) + qty;
+      const fifoTr = transferFifoLotesProducto(p, qty, 'principal', 'cali');
       DB.movimientos.push({
         id: uid('MOV'), fecha, id_producto: p.id,
         tipo: 'traslado_cali', cantidad: -qty,
-        costo_unitario: p.costo || 0, referencia: ref,
+        costo_unitario: fifoTr.costoUnitarioPromedio, lotes_consumidos: fifoTr.desglose, referencia: ref,
         nota: `📍 Envío a Stock Cali${notaUser ? ' · ' + notaUser : ''}`
       });
     } else {
-      p.stock_cali = Math.max(0, (p.stock_cali || 0) - qty);
-      p.stock += qty;
+      const fifoTr = transferFifoLotesProducto(p, qty, 'cali', 'principal');
       DB.movimientos.push({
         id: uid('MOV'), fecha, id_producto: p.id,
         tipo: 'retorno_cali', cantidad: qty,
-        costo_unitario: p.costo || 0, referencia: ref,
+        costo_unitario: fifoTr.costoUnitarioPromedio, lotes_consumidos: fifoTr.desglose, referencia: ref,
         nota: `↩️ Retorno desde Cali a Bodega Principal${notaUser ? ' · ' + notaUser : ''}`
       });
     }
@@ -8437,11 +9189,17 @@ function saveMuestra(){
   if(!pid||qty<=0){alert('Selecciona producto y cantidad');return;}
   const p=getProducto(pid);
   if(p.stock<qty){alert(`Stock insuficiente: ${p.nombre} tiene ${p.stock} unidades`);return;}
-  p.stock-=qty;
+  const fifoRes = consumeFifoLotesProducto(p, qty, 'principal');
   const nota=document.getElementById('m-nota').value;
-  DB.movimientos.push({id:uid('MOV'),fecha:document.getElementById('m-fecha').value,id_producto:pid,tipo,cantidad:-qty,nota:`${tipo}: ${nota}`});
+  const fechaM=document.getElementById('m-fecha').value;
+  const mov = {id:uid('MOV'),fecha:fechaM,id_producto:pid,tipo,cantidad:-qty,costo_unitario:fifoRes.costoUnitarioPromedio,lotes_consumidos:fifoRes.desglose,nota:`${tipo}: ${nota}`};
+  DB.movimientos.push(mov);
   if(!DB.muestras)DB.muestras=[];
-  DB.muestras.push({id:uid('MUE'),fecha:document.getElementById('m-fecha').value,id_producto:pid,cantidad:qty,tipo,nota});
+  const mue = {id:uid('MUE'),fecha:fechaM,id_producto:pid,cantidad:qty,tipo,nota,costo_unitario:fifoRes.costoUnitarioPromedio,costo_total:Math.round(fifoRes.costoTotal),lotes_consumidos:fifoRes.desglose};
+  DB.muestras.push(mue);
+  syncProductoToFirestore(p).catch(()=>{});
+  syncMovimientoToFirestore(mov).catch(()=>{});
+  syncMuestraToFirestore(mue).catch(()=>{});
   saveDB();closeModal('modal-muestra');renderInventario();
 }
 
@@ -10066,12 +10824,17 @@ async function confirmarPedidoWeb(pedidoKey) {
     itemsRaw.forEach(it => {
       const prod = DB.productos.find(p => p.id === it.id || (p.nombre && it.name && p.nombre.trim().toLowerCase() === it.name.trim().toLowerCase()));
       const pid = prod ? prod.id : (it.id || 'PROD-WEB');
-      const costo = prod ? (prod.costo || 0) : 0;
       const qty = parseInt(it.qty) || 1;
       const precioUnit = parseFloat(it.unitPrice) || parseFloat(it.price) || 0;
+      let costo = prod ? (prod.costo || 0) : 0;
+      let costoLinea = costo * qty;
+      let lotesCons = [];
 
       if (prod && prod.stock !== undefined) {
-        prod.stock = Math.max(0, prod.stock - qty);
+        const fifoRes = consumeFifoLotesProducto(prod, qty, 'principal');
+        costo = fifoRes.costoUnitarioPromedio;
+        costoLinea = fifoRes.costoTotal;
+        lotesCons = fifoRes.desglose;
         DB.movimientos.push({
           id: uid('MOV'),
           fecha: today(),
@@ -10079,13 +10842,14 @@ async function confirmarPedidoWeb(pedidoKey) {
           tipo: 'venta',
           cantidad: -qty,
           costo_unitario: costo,
+          lotes_consumidos: lotesCons,
           referencia: ventaNum,
           nota: 'Venta Tienda Web · ' + (pedido.cliente_nombre || '')
         });
         try { syncProductoToFirestore(prod); } catch(e){}
       }
 
-      costoTotalVenta += costo * qty;
+      costoTotalVenta += costoLinea;
       itemsDetalle.push({
         id: uid('DET'),
         id_venta: ventaId,
@@ -10093,6 +10857,7 @@ async function confirmarPedidoWeb(pedidoKey) {
         cantidad: qty,
         precio_unitario: precioUnit,
         costo_unitario: costo,
+        lotes_consumidos: lotesCons,
         subtotal: precioUnit * qty
       });
     });
@@ -10458,16 +11223,20 @@ async function confirmarPedidoDist(pedidoId, currentState) {
       destinatario_notas: pedido.destinatario_notas || '',
       flete: pedido.flete || 0
     };
-    // Deduct stock
+    // Deduct stock (PEPS)
     items.forEach(det => {
       const p = getProducto(det.id_producto);
       if (p && p.stock >= det.cantidad) {
-        p.stock -= det.cantidad;
+        const fifoRes = consumeFifoLotesProducto(p, det.cantidad, 'principal');
+        det.costo_unitario = fifoRes.costoUnitarioPromedio;
+        det.lotes_consumidos = fifoRes.desglose;
         DB.movimientos.push({id:'MOV-'+det.id, fecha:venta.fecha, id_producto:p.id,
-          tipo:'venta', cantidad:-det.cantidad, costo_unitario:det.costo_unitario,
+          tipo:'venta', cantidad:-det.cantidad, costo_unitario:det.costo_unitario, lotes_consumidos:det.lotes_consumidos,
           referencia:pedidoId, nota:'Pedido '+pedido.num+' · '+pedido.dist_nombre});
+        syncProductoToFirestore(p).catch(()=>{});
       }
     });
+    venta.costo_productos = Math.round(items.reduce((a, i) => a + ((Number(i.costo_unitario) || 0) * i.cantidad), 0));
     DB.ventas.push(venta);
     DB.detalle_ventas.push(...items);
 
@@ -10545,13 +11314,17 @@ async function cancelarPedidoDist(pedidoId) {
 
   const wasConfirmed = pedido.estado_pago === 'confirmado';
   if (wasConfirmed) {
+    const detsDist = getVentaDetalle(pedidoId);
     (pedido.items||[]).forEach(i => {
       const p = getProducto(i.id);
       if (p) {
-        p.stock += i.cantidad;
+        const detOrig = detsDist.find(d => d.id_producto === i.id);
+        const cUnit = detOrig?.costo_unitario ?? i.costo ?? p.costo;
+        restoreFifoLotesProducto(p, detOrig?.lotes_consumidos, i.cantidad, cUnit, 'principal', pedido.fecha, i.cantidad);
         DB.movimientos.push({id:'MOV-CANC-'+pedidoId+'-'+i.id, fecha:today(), id_producto:p.id,
-          tipo:'ajuste', cantidad:i.cantidad, costo_unitario:i.costo||0,
+          tipo:'ajuste', cantidad:i.cantidad, costo_unitario:cUnit,
           referencia:pedidoId, nota:'Cancelación pedido '+(pedido.num||pedidoId)});
+        syncProductoToFirestore(p).catch(()=>{});
       }
     });
     DB.ventas = DB.ventas.filter(v => v.id !== pedidoId);
@@ -11189,19 +11962,29 @@ function updateDistConsecutivo() {
 }
 
 function saveVentaDist() {
-  const items = []; let totalBruto = 0, costoProd = 0, valid = true;
+  const rawRows = []; let totalBruto = 0, valid = true;
+  const reqByProd = {};
   document.querySelectorAll('#dv-items .form-row').forEach(row => {
+    if (!valid) return;
     const prod = row.querySelector('.dv-prod');
     const qty  = parseInt(row.querySelector('.dv-qty')?.value)||0;
     if (!prod?.value || qty <= 0) { valid = false; return; }
     const p = getProducto(prod.value); if (!p) return;
-    if (p.stock < qty) { alert('Stock insuficiente: ' + p.nombre + ' (' + p.stock + ' disponibles)'); valid = false; return; }
+    reqByProd[p.id] = (reqByProd[p.id] || 0) + qty;
+    if (p.stock < reqByProd[p.id]) { alert('Stock insuficiente: ' + p.nombre + ' (' + p.stock + ' disponibles)'); valid = false; return; }
     const prUnit = precioEnFecha(p, document.getElementById('dv-fecha')?.value || today());
-    totalBruto += prUnit * qty; costoProd += p.costo * qty;
-    items.push({id:uid('DET'),id_venta:'',id_producto:p.id,cantidad:qty,precio_unitario:prUnit,costo_unitario:p.costo,subtotal:prUnit*qty});
+    totalBruto += prUnit * qty;
+    rawRows.push({ p, qty, prUnit });
   });
-  if (!valid || items.length === 0) { if(valid) alert('Agrega al menos un producto'); return; }
+  if (!valid || rawRows.length === 0) { if(valid) alert('Agrega al menos un producto'); return; }
   if (totalBruto < 70000) { alert('El pedido mínimo para distribuidoras es de ' + fmt(70000)); return; }
+
+  const items = []; let costoProd = 0;
+  rawRows.forEach(({ p, qty, prUnit }) => {
+    const fifoRes = consumeFifoLotesProducto(p, qty, 'principal');
+    costoProd += fifoRes.costoTotal;
+    items.push({id:uid('DET'),id_venta:'',id_producto:p.id,cantidad:qty,precio_unitario:prUnit,costo_unitario:fifoRes.costoUnitarioPromedio,lotes_consumidos:fifoRes.desglose,subtotal:prUnit*qty});
+  });
 
   const consecutivo = getNextDistConsecutivo();
   const cid = document.getElementById('dv-cliente').value;
@@ -11223,21 +12006,21 @@ function saveVentaDist() {
     metodo_pago: document.getElementById('dv-metodo-pago').value,
     estado_pago: document.getElementById('dv-estado-pago').value,
     estado_envio: 'preparando',
-    costo_productos: costoProd,
+    costo_productos: Math.round(costoProd),
     cashback_generado: 0,
     dist_id: _currentDist.id,
     dist_nombre: _currentDist.nombre,
     dist_consecutivo: consecutivo
   };
 
-  // Descontar stock y registrar movimientos
+  // Registrar movimientos
   items.forEach(d => {
     const p = getProducto(d.id_producto);
     if (p) {
-      p.stock -= d.cantidad;
       DB.movimientos.push({id:uid('MOV'),fecha:venta.fecha,id_producto:p.id,tipo:'venta',
-        cantidad:-d.cantidad,costo_unitario:d.costo_unitario,referencia:vid,
+        cantidad:-d.cantidad,costo_unitario:d.costo_unitario,lotes_consumidos:d.lotes_consumidos,referencia:vid,
         nota:'Pedido #' + String(consecutivo).padStart(4,'0') + ' - ' + _currentDist.nombre});
+      syncProductoToFirestore(p).catch(()=>{});
     }
   });
   if (cid) { const cl = getCliente(cid); if(cl) cl.total_historico = (cl.total_historico||0) + venta.total_pagado; }
