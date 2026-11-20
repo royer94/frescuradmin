@@ -1750,7 +1750,7 @@ html, body {
 
 <!-- MODAL: LOTES DE COSTO PEPS / FIFO -->
 <div class="modal-overlay" id="modal-lotes-fifo" onclick="if(event.target===this)closeModal('modal-lotes-fifo')">
-  <div class="modal modal-lg" style="max-width:740px">
+  <div class="modal modal-lg" style="max-width:840px">
     <div class="modal-header">
       <div>
         <span class="modal-title" id="lf-modal-title">📦 Lotes PEPS / FIFO</span>
@@ -1766,15 +1766,15 @@ html, body {
         <button type="button" class="btn btn-xs btn-secondary" onclick="addRowModalLotesFifo()">+ Agregar capa / lote</button>
       </div>
       <div class="table-wrap" style="border:1px solid var(--border);border-radius:var(--r);margin-bottom:12px">
-        <table>
+        <table style="width:100%;table-layout:fixed">
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th style="width:95px">Restante</th>
-              <th style="width:120px">Costo Unit. (COP)</th>
+              <th style="width:138px">Fecha</th>
+              <th style="width:82px">Restante</th>
+              <th style="width:110px">Costo Unit.</th>
               <th>Nota / Referencia</th>
-              <th style="text-align:right">Subtotal</th>
-              <th style="width:40px"></th>
+              <th style="width:98px;text-align:right">Subtotal</th>
+              <th style="width:44px"></th>
             </tr>
           </thead>
           <tbody id="lf-tbody"></tbody>
@@ -6238,12 +6238,12 @@ function renderModalLotesFifoRows() {
   tbody.innerHTML = _lfEditRows.map((l, idx) => {
     const sub = (parseInt(l.restante, 10) || 0) * (Number(l.costo) || 0);
     return `<tr>
-      <td><input type="date" value="${escapeHtml(l.fecha)}" style="padding:5px 7px;font-size:12px" onchange="_lfEditRows[${idx}].fecha=this.value;renderModalLotesFifoRows()"></td>
-      <td><input type="number" min="0" value="${l.restante}" style="padding:5px 7px;font-size:12px;width:82px;font-weight:600" oninput="_lfEditRows[${idx}].restante=Math.max(0,parseInt(this.value)||0);renderModalLotesFifoRows()"></td>
-      <td><input type="number" min="0" step="1" value="${l.costo}" style="padding:5px 7px;font-size:12px;width:105px;font-weight:600" oninput="_lfEditRows[${idx}].costo=Math.max(0,Number(this.value)||0);renderModalLotesFifoRows()"></td>
+      <td><input type="date" value="${escapeHtml(l.fecha)}" style="padding:5px 6px;font-size:12px;width:100%" onchange="_lfEditRows[${idx}].fecha=this.value;renderModalLotesFifoRows()"></td>
+      <td><input type="number" min="0" value="${l.restante}" style="padding:5px 6px;font-size:12px;width:100%;font-weight:600" oninput="_lfEditRows[${idx}].restante=Math.max(0,parseInt(this.value)||0);renderModalLotesFifoRows()"></td>
+      <td><input type="number" min="0" step="1" value="${l.costo}" style="padding:5px 6px;font-size:12px;width:100%;font-weight:600" oninput="_lfEditRows[${idx}].costo=Math.max(0,Number(this.value)||0);renderModalLotesFifoRows()"></td>
       <td><input type="text" value="${escapeHtml(l.nota)}" placeholder="Ej: Compra proveedor..." style="padding:5px 7px;font-size:12px;width:100%" oninput="_lfEditRows[${idx}].nota=this.value"></td>
       <td style="text-align:right;white-space:nowrap;font-weight:600" class="text-mono">${fmt(sub)}</td>
-      <td><button type="button" class="btn btn-xs btn-danger" onclick="removeRowModalLotesFifo(${idx})" title="Eliminar lote">✕</button></td>
+      <td style="text-align:center"><button type="button" class="btn btn-xs btn-danger" onclick="removeRowModalLotesFifo(${idx})" title="Eliminar lote">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -8970,8 +8970,10 @@ function onEntradaProductoChange(){
 
 function openModalEntrada(){
   document.getElementById('e-fecha').value=today();
-  document.getElementById('e-producto').innerHTML=DB.productos.filter(p=>p.activo).map(p=>`<option value="${p.id}">${p.nombre} (Stock: ${p.stock})</option>`).join('');
+  const activosOrdenados = DB.productos.filter(p=>p.activo).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  document.getElementById('e-producto').innerHTML='<option value="">— Selecciona un producto —</option>' + activosOrdenados.map(p=>`<option value="${p.id}">${p.nombre} (Stock: ${p.stock})</option>`).join('');
   ['e-cantidad','e-costo','e-nota'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('e-costo').placeholder='Ej: 2500';
   onEntradaProductoChange();
   openModal('modal-entrada');
 }
